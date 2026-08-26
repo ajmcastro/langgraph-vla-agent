@@ -44,9 +44,37 @@ Design decisions made at each milestone boundary — the "why" that should survi
 
 ---
 
-## Milestone 1 — (Pending approval)
+## Milestone 1 — Domain contracts and deterministic mock loop
 
-Rationale to be written after milestone completion.
+### Protocol over ABC for policy and environment boundaries
+
+**Decision:** `RobotPolicy` and `RobotEnvironment` are `typing.Protocol` classes, not abstract base classes (ABC).
+
+**Why:** Protocol uses structural subtyping — any class with the right method signatures satisfies the interface, without needing to inherit from it. This means `SmolVLAPolicyAdapter` can satisfy `RobotPolicy` without importing from the agent codebase. It also means the Protocol is checkable at static analysis time (mypy) and optionally at runtime (`@runtime_checkable`). ABCs would force every future implementation to import and inherit from our base, creating an unnecessary coupling.
+
+### Validation gate location: Executor, not RobotAction
+
+**Decision:** `RobotAction` allows NaN/Inf values in its `values` field. The Executor validates finiteness before passing the action to the environment.
+
+**Why:** The domain model needs to be constructable with invalid values so test code can exercise the Executor's validation path. If the model itself rejected NaN, there would be no way to test `INVALID_ACTION` behavior without bypassing Pydantic. The Executor's gate is also configurable (`validate_actions=False`) which allows replay evaluation to skip validation for performance where actions are pre-validated upstream.
+
+### StrEnum over (str, Enum)
+
+**Decision:** All enums inherit from `StrEnum` (Python 3.11+) rather than the older `(str, Enum)` pattern.
+
+**Why:** `StrEnum` is the modern, explicit way to create string enums in Python 3.12. It is more readable, is the ruff-recommended form (UP042), and works identically in all contexts where string comparison or JSON serialization is needed. Since we require Python ≥ 3.12, there is no compatibility cost.
+
+### npt.NDArray[Any] for numpy type annotations
+
+**Decision:** numpy array fields use `npt.NDArray[Any]` rather than bare `np.ndarray`.
+
+**Why:** mypy strict mode requires type arguments for generic types. `np.ndarray` is generic over the dtype and shape. Using `npt.NDArray[Any]` satisfies mypy while remaining flexible — the dtype is embodiment-specific (float32 for SO-100 joint positions, uint8 for camera images) and will be tightened per-field in M3 when SmolVLA's observation space is known precisely.
+
+### Domain models deferred to M5: TaskGoal, TaskPlan, WorldState, AgentState
+
+**Decision:** These models are not created in M1.
+
+**Why:** They require the LangGraph orchestration layer (M5) to be meaningful. `TaskPlan` is a list of `SubTask`s — without a planner, there's nothing to produce it. `AgentState` is the LangGraph state TypedDict — it requires `langgraph` as a dependency. Creating stubs now would be empty modules without tests, violating the "no abstractions created only to match a diagram" rule.
 
 ## Milestone 2 — (Pending)
 ## Milestone 3 — (Pending)

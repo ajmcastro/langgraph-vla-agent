@@ -75,3 +75,6 @@ checkpoints/
 # Logs
 *.log
 logs/
+
+# Auto-generated chat history — re-exported by scripts/export_chat.py on every Stop hook
+docs/CHAT_HISTORY.md

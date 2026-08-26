@@ -96,6 +96,24 @@ Results are reported with mean ± std and sample size. Statistical tests are app
 
 ---
 
+## What mock evaluation proves in M1
+
+With the M1 mock loop running, these claims are testable and verifiable:
+
+| Claim | How it is tested |
+|---|---|
+| The executor returns `SUCCESS` when the environment signals success | `SUCCEED_AT_STEP` scenario, confirmed by `test_executor_success_path` |
+| The executor returns `INVALID_ACTION` when the policy returns NaN | `INVALID_AFTER_N` policy + `test_executor_invalid_action_path` |
+| The executor returns `MAX_STEPS_EXCEEDED` when the loop budget is exhausted | `NEVER_TERMINATE` env + `max_steps=5`, confirmed by step count |
+| The executor catches policy exceptions and returns `POLICY_ERROR` | `RAISE_AFTER_N` policy + `test_executor_policy_error_path` |
+| `validate_actions=False` passes NaN to the environment | Confirmed by `test_executor_validation_disabled_passes_nan` |
+| `reset()` is called with the correct `PolicyContext` | Confirmed by `test_executor_passes_context_to_policy_reset` |
+| Two consecutive runs are independent (no shared state) | Confirmed by `test_executor_runs_are_independent` |
+
+None of these claims require a GPU, network, dataset, or robot. They prove software behavior, not sensorimotor capability.
+
+---
+
 ## Anti-patterns to avoid
 
 - Reporting simulation or offline results as "robot performance"

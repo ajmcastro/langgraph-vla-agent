@@ -66,6 +66,7 @@ packages = ["src/langgraph_vla_agent"]
 line-length = 100
 target-version = "py312"
 src = ["src"]
+exclude = ["scripts/"]  # user scripts outside the package; not linted
 
 [tool.ruff.lint]
 select = [

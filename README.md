@@ -107,7 +107,7 @@ uv pip install --torch-backend cu128 lerobot
 | # | Title | Status |
 |---|---|---|
 | 0 | Foundation and verified project plan | ✅ Complete |
-| 1 | Domain contracts and deterministic mock loop | Pending |
+| 1 | Domain contracts and deterministic mock loop | ✅ Complete |
 | 2 | Public dataset inspection and replay backend | Pending |
 | 3 | SmolVLA baseline | Pending |
 | 4 | Cloud GPU fine-tuning | Pending |
