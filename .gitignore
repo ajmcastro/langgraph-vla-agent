@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# uv / virtual environments
+.venv/
+venv/
+.python-version
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Type checking
+.mypy_cache/
+
+# Linting
+.ruff_cache/
+
+# Environment variables — never commit real credentials
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.DS_Store
+.cursor/
+
+# macOS
+.DS_Store
+Thumbs.db
+._*
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Generated artifacts — large binary outputs, evaluation results, plots
+artifacts/
+outputs/
+wandb/
+mlruns/
+
+# Datasets — never commit large dataset files
+data/raw/
+data/cache/
+*.parquet
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+
+# Model checkpoints — reference by URL/artifact ID instead
+checkpoints/
+*.pth
+*.onnx
+
+# Profiling
+*.prof
+
+# Logs
+*.log
+logs/
