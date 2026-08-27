@@ -1,0 +1,49 @@
+{
+  "episode_id": "fixture_episode_001",
+  "instruction": "pick up the red cube and place it in the bin",
+  "dataset_id": "fixture",
+  "action_dim": 6,
+  "state_dim": 6,
+  "steps": [
+    {
+      "timestep": 0,
+      "observation": {"state": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00]},
+      "action": [0.10, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "terminated": false,
+      "truncated": false,
+      "success": false
+    },
+    {
+      "timestep": 1,
+      "observation": {"state": [0.10, 0.00, 0.00, 0.00, 0.00, 0.00]},
+      "action": [0.00, 0.10, 0.00, 0.00, 0.00, 0.00],
+      "terminated": false,
+      "truncated": false,
+      "success": false
+    },
+    {
+      "timestep": 2,
+      "observation": {"state": [0.10, 0.10, 0.00, 0.00, 0.00, 0.00]},
+      "action": [0.00, 0.00, 0.10, 0.00, 0.00, 0.00],
+      "terminated": false,
+      "truncated": false,
+      "success": false
+    },
+    {
+      "timestep": 3,
+      "observation": {"state": [0.10, 0.10, 0.10, 0.00, 0.00, 0.00]},
+      "action": [0.00, 0.00, 0.00, 0.10, 0.00, 0.00],
+      "terminated": false,
+      "truncated": false,
+      "success": false
+    },
+    {
+      "timestep": 4,
+      "observation": {"state": [0.10, 0.10, 0.10, 0.10, 0.00, 0.00]},
+      "action": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "terminated": true,
+      "truncated": false,
+      "success": true
+    }
+  ]
+}

@@ -86,6 +86,7 @@ make test             # all non-hardware tests
 ### Adding optional extras (later milestones)
 
 ```bash
+make setup-datasets   # adds huggingface_hub for dataset inspection (Milestone 2+)
 make setup-agent      # adds LangGraph + langchain-core (Milestone 5+)
 make setup-vla        # adds LeRobot + SmolVLA — large download (Milestone 3+)
 ```
@@ -108,7 +109,7 @@ uv pip install --torch-backend cu128 lerobot
 |---|---|---|
 | 0 | Foundation and verified project plan | ✅ Complete |
 | 1 | Domain contracts and deterministic mock loop | ✅ Complete |
-| 2 | Public dataset inspection and replay backend | Pending |
+| 2 | Public dataset inspection and replay backend | ✅ Complete |
 | 3 | SmolVLA baseline | Pending |
 | 4 | Cloud GPU fine-tuning | Pending |
 | 5 | LangGraph orchestration | Pending |

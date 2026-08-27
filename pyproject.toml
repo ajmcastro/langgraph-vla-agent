@@ -31,6 +31,13 @@ dev = [
     "mypy>=1.13.0",
 ]
 
+# Milestone 2+: Dataset metadata inspection via HuggingFace Hub.
+# Much lighter than [vla] — no PyTorch, no model download.
+# Used by: make inspect-data, tests/integration/datasets/
+datasets = [
+    "huggingface-hub>=0.24.0",
+]
+
 # Milestone 5+: LangGraph orchestration layer.
 # Provider-specific langchain packages (anthropic, openai, …) added by the user
 # depending on which LLM backend they configure.
@@ -117,5 +124,5 @@ warn_unused_configs = true
 # Overrides for optional extras not installed in the base dev environment.
 # These become active when [vla] or [agent] extras are installed.
 [[tool.mypy.overrides]]
-module = ["lerobot.*", "torch.*", "langgraph.*", "langchain_core.*"]
+module = ["lerobot.*", "torch.*", "langgraph.*", "langchain_core.*", "huggingface_hub.*"]
 ignore_missing_imports = true

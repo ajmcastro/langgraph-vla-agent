@@ -1,0 +1,33 @@
+{
+  "episode_id": "fixture_episode_003",
+  "instruction": "move the green block to the left side of the table",
+  "dataset_id": "fixture",
+  "action_dim": 6,
+  "state_dim": 6,
+  "steps": [
+    {
+      "timestep": 0,
+      "observation": {"state": [0.00, 0.20, 0.00, 0.00, 0.00, 0.00]},
+      "action": [-0.10, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "terminated": false,
+      "truncated": false,
+      "success": false
+    },
+    {
+      "timestep": 1,
+      "observation": {"state": [-0.10, 0.20, 0.00, 0.00, 0.00, 0.00]},
+      "action": [-0.10, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "terminated": false,
+      "truncated": false,
+      "success": false
+    },
+    {
+      "timestep": 2,
+      "observation": {"state": [-0.20, 0.20, 0.00, 0.00, 0.00, 0.00]},
+      "action": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+      "terminated": true,
+      "truncated": false,
+      "success": true
+    }
+  ]
+}

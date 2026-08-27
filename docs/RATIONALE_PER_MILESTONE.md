@@ -76,7 +76,39 @@ Design decisions made at each milestone boundary — the "why" that should survi
 
 **Why:** They require the LangGraph orchestration layer (M5) to be meaningful. `TaskPlan` is a list of `SubTask`s — without a planner, there's nothing to produce it. `AgentState` is the LangGraph state TypedDict — it requires `langgraph` as a dependency. Creating stubs now would be empty modules without tests, violating the "no abstractions created only to match a diagram" rule.
 
-## Milestone 2 — (Pending)
+## Milestone 2 — Public dataset inspection and replay backend
+
+### JSON fixtures for unit tests; YAML for provenance
+
+**Decision:** Replay episode fixtures are committed as small JSON files in `data/fixtures/episodes/`. Dataset provenance metadata is stored in `data/provenance/*.yaml`.
+
+**Why:** JSON round-trips through Pydantic's `model_validate_json()` without any extra library. It is human-readable and small enough to commit. YAML is preferred for the provenance record because it supports inline comments (open questions, notes) that JSON does not. Neither format requires downloading data. Large dataset files (parquet, video frames) are never committed — only the metadata.
+
+### ReplayEnvironment ignores the action argument
+
+**Decision:** `ReplayEnvironment.step()` accepts a `RobotAction` argument (to satisfy the `RobotEnvironment` Protocol) but discards it. The next observation always comes from the recorded trajectory, not from simulating the action.
+
+**Why:** This is the defining semantic of offline/replay evaluation. The environment is a data-playback device, not a physics simulator. Pretending the action influences the next state would be incorrect and misleading — the only honest behaviour is to play back the pre-recorded observation regardless of what action was taken. This constraint is documented explicitly in the class docstring and in `docs/evaluation.md` so evaluators cannot mistake replay results for closed-loop performance.
+
+### ReplayRobotPolicy and ReplayEnvironment have independent step pointers
+
+**Decision:** Both objects take the same `ReplayEpisode` but each maintains its own `_ptr: int`. Both reset to `ptr=0` on their respective `reset()` calls.
+
+**Why:** The Executor calls `policy.reset()` and `env.reset()` independently at the start of each `run()`. If a shared pointer were used, one `reset()` call could corrupt the other's state. Independent pointers keep the objects loosely coupled and let either be swapped out without coordination (e.g. replace `ReplayRobotPolicy` with `SmolVLAPolicyAdapter` in M3 while keeping `ReplayEnvironment`).
+
+### EpisodeStore as a structural Protocol
+
+**Decision:** `EpisodeStore` uses `typing.Protocol` with `@runtime_checkable`, matching the M1 pattern for `RobotPolicy` and `RobotEnvironment`.
+
+**Why:** The same reasoning applies: `FixtureEpisodeStore` (M2) and a future `HubEpisodeStore` (M3) satisfy the Protocol without inheriting from it. The Executor and evaluation code import only the Protocol — never a concrete implementation — keeping layers decoupled.
+
+### [datasets] optional extra for huggingface_hub
+
+**Decision:** `huggingface_hub>=0.24.0` is placed in a new `[datasets]` optional extra, separate from `[vla]`.
+
+**Why:** `[vla]` pulls in all of LeRobot and PyTorch (gigabytes). Dataset metadata inspection only needs `huggingface_hub` (~MB). Separating these lets contributors run `make inspect-data` to fetch Hub metadata without setting up the full ML stack. `HubDatasetInspector` guards its import with a `try/except ImportError` and raises a clear message if the extra is missing.
+
+## Milestone 3 — (Pending)
 ## Milestone 3 — (Pending)
 ## Milestone 4 — (Pending)
 ## Milestone 5 — (Pending)

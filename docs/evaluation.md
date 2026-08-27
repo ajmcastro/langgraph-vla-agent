@@ -96,6 +96,34 @@ Results are reported with mean ± std and sample size. Statistical tests are app
 
 ---
 
+## What replay evaluation proves in M2
+
+With the M2 replay backend running, these claims are testable and verifiable:
+
+| Claim | How it is tested |
+|---|---|
+| `ReplayRobotPolicy` serves recorded actions in episode order | `test_replay_policy_returns_actions_in_order` |
+| `ReplayRobotPolicy` resets to step 0 on `reset()` — independent episodes | `test_replay_policy_resets_ptr_to_zero`, `test_replay_policy_second_run_starts_from_beginning` |
+| `ReplayRobotPolicy` raises `IndexError` when exhausted | `test_replay_policy_raises_when_exhausted` |
+| `ReplayEnvironment` ignores the action argument and replays recorded observations | `test_replay_environment_action_is_ignored` |
+| `ReplayEnvironment` returns `terminated=True, success=True` at the last step of a successful episode | `test_replay_environment_step_returns_success_on_terminal` |
+| `ReplayEnvironment` over-run truncates gracefully (no crash) | `test_replay_environment_overrun_truncates` |
+| `FixtureEpisodeStore` round-trips episode data from JSON without data loss | `test_load_episode_returns_replay_episode`, `test_load_episode_has_correct_action_dim` |
+| `EpisodeSplitter` produces the same split for the same seed | `test_split_is_deterministic_with_same_seed` |
+| `EpisodeSplitter` splits are leak-free — no episode in two partitions | `test_split_has_no_leakage` |
+| The Executor with replay backends returns SUCCESS matching the recorded episode outcome | `test_executor_replay_success_episode` |
+| The Executor with replay backends returns FAILURE matching the recorded episode outcome | `test_executor_replay_failure_episode` |
+
+None of these claims require a GPU, network, dataset, or robot. They prove the **infrastructure** for replay evaluation is correct, not that any model performs well on a task.
+
+**What replay infrastructure does NOT prove:**
+
+- That `lerobot/smolvla_base` or any fine-tuned checkpoint makes good predictions (M3).
+- That a policy would succeed or fail if allowed to take actions that differ from the recorded ones (closed-loop evidence requires simulation or hardware).
+- That the recorded task outcomes generalise beyond the 50 episodes in `svla_so100_pickplace`.
+
+---
+
 ## What mock evaluation proves in M1
 
 With the M1 mock loop running, these claims are testable and verifiable:

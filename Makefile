@@ -6,7 +6,8 @@
 # =============================================================================
 
 .DEFAULT_GOAL := help
-.PHONY: help setup sync format lint typecheck test test-unit test-integration \
+.PHONY: help setup sync setup-datasets setup-agent setup-vla \
+        format lint typecheck test test-unit test-integration \
         check inspect-data evaluate-mock evaluate-replay evaluate-policy \
         evaluate-agent train run-demo clean
 
@@ -28,6 +29,10 @@ sync:
 ## setup-agent: Install core + dev + LangGraph agent deps (Milestone 5+)
 setup-agent:
 	$(UV) sync --extra dev --extra agent
+
+## setup-datasets: Install dataset inspection deps (huggingface_hub; no GPU needed)
+setup-datasets:
+	$(UV) sync --extra dev --extra datasets
 
 ## setup-vla: [OPTIONAL] Install VLA/LeRobot deps — large download, needs GPU for training
 setup-vla:
@@ -76,9 +81,9 @@ check: lint typecheck test-unit
 # Data (Milestone 2+)
 # ---------------------------------------------------------------------------
 
-## inspect-data: [OPTIONAL] Inspect dataset metadata without full download
+## inspect-data: [OPTIONAL/NETWORK] Inspect dataset metadata without downloading data
 inspect-data:
-	@echo "Milestone 2 target — not yet implemented"
+	$(PYTHON) scripts/inspect_dataset.py
 
 # ---------------------------------------------------------------------------
 # Evaluation (Milestone 3+)

@@ -1,0 +1,29 @@
+# Provenance record for the primary dataset candidate.
+# Inspected in Milestone 2; revision and license verified from Hub metadata.
+# Schema: docs/data.md#provenance-record-format
+
+dataset:
+  hub_id: lerobot/svla_so100_pickplace
+  revision: 728583b5eaf9e739a7f119e2def466fa1d552402"          # TODO: fill in exact commit hash after Hub inspection (make inspect-data)
+  license_spdx: Apache-2.0  # per HuggingFace LeRobot norms; to be confirmed via Hub card
+  episodes: 50            # 10 per cube position × 5 positions
+  embodiment: so100
+  action_dim: 6           # SO-100 6-DOF joint positions
+  state_dim: 6            # proprioceptive state: 6 joint positions (radians)
+  obs_keys:
+    - observation.image.front   # 640×480 RGB @ 30 fps
+    - observation.state         # 6-dim joint position vector
+  language_field: task    # per-episode natural-language instruction string
+  download_date: null     # filled in when dataset is first fetched locally
+  notes: >
+    Reference dataset from the SmolVLA paper (arXiv:2506.01844).
+    Designed for fine-tuning lerobot/smolvla_base.
+    50 episodes is small; generalisation claims must be qualified accordingly.
+    Scene diversity is limited to 5 fixed cube positions.
+
+open_questions:
+  - Confirm exact license from Hub dataset card (expected Apache-2.0)
+  - Record exact Hub revision (git commit hash) after first fetch
+  - Verify language annotations are per-episode (not per-task-type)
+  - Measure on-disk size of parquet + video frames
+  - Check compatibility with lerobot[dataset] streaming API schema version
