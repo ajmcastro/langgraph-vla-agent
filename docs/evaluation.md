@@ -81,18 +81,45 @@ Every result, metric, and claim in this project must identify its evaluation mod
 ## Comparison protocol (Milestone 6)
 
 The planning-granularity experiment compares three conditions:
-1. VLA-only (no orchestration)
-2. Coarse agentic plan (few meaningful subtasks)
-3. Fine agentic plan (smaller physical skills)
+1. **VLA-only** — the full multi-step instruction is passed directly to the policy; no LangGraph orchestration.
+2. **Coarse agentic** — LangGraph decomposes the goal into 2–4 meaningful manipulation subtasks (e.g. "approach → grasp → lift → place").
+3. **Fine agentic** — LangGraph decomposes into smaller physical skills (e.g. "open gripper → move to pre-grasp → close gripper → …").
 
-All conditions must use:
-- The same scenario set and seeds / replay split
-- The same policy checkpoint
-- The same action budget (max steps per subtask / episode)
-- The same success predicates
-- The same evaluation mode
+### Planned experimental design
 
-Results are reported with mean ± std and sample size. Statistical tests are applied when n ≥ 10 per condition. The small sample disclaimer is included when n < 10.
+**Dataset and task:** `lerobot/svla_so100_pickplace` (50 episodes, Apache-2.0). Task: pick a cube from one of 5 positions and place it in a target zone. This is the reference task from the SmolVLA paper, making results directly comparable to the published baseline.
+
+**Policy checkpoint:** The M4 fine-tuned checkpoint (`smolvla_so100_m4`, step 010000) for all three conditions. The base model (`lerobot/smolvla_base`) is evaluated separately as an additional baseline to isolate the effect of fine-tuning from the effect of orchestration.
+
+**Evaluation mode:** Offline/replay. The test split (15% holdout, ~7–8 episodes not seen during training) is the scenario set. Each episode is run under all three conditions against the same recorded observations.
+
+**Success predicate:** Action prediction L1 error below the base model's per-episode mean on the same split. Subtask completion is defined by replay-level episode termination signals.
+
+**Action budget:** Max 200 steps per episode (matching the longest episode in `svla_so100_pickplace`). Subtask-level budget allocated proportionally by the planner.
+
+**Sample size:** With ~7–8 test episodes, n < 10 per condition. The small-sample disclaimer applies to all M6 results. Statistical tests (Wilcoxon signed-rank) are included for completeness but effect sizes and direction are the primary evidence.
+
+**What would constitute a meaningful result:**
+- VLA-only vs coarse agentic: a consistent L1 reduction (>10%) or improved subtask completion rate across all test episodes would support the orchestration hypothesis.
+- Coarse vs fine agentic: a tradeoff — lower error but more LLM calls and higher latency — would support the granularity hypothesis.
+- No measurable difference would be an honest and publishable null result: it would suggest that SmolVLA's native language understanding is sufficient for this task without decomposition.
+
+### What must be finalized in M5 (before M6 can run)
+
+The LangGraph graph (M5) determines what "a coarse subtask decomposition" and "a fine subtask decomposition" actually mean in code. The subtask vocabulary, plan schema, and orchestration logic are M5 deliverables. M6 cannot be designed beyond the structural level above until M5 exists. Specifically:
+- Exact subtask labels and granularity levels (defined by the planner in M5)
+- How the agent decides a subtask is complete in replay mode (must be replay-compatible — no live camera feedback)
+- Whether the LLM planner is deterministic or sampled (affects reproducibility)
+
+### Consistency requirements (all conditions)
+
+- Same test split and episode order
+- Same policy checkpoint
+- Same action budget
+- Same success predicates
+- Same evaluation mode (offline/replay)
+
+Results are reported with mean ± std and sample size. Statistical tests are applied when n ≥ 10 per condition. The small-sample disclaimer is included when n < 10.
 
 ---
 

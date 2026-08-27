@@ -2,6 +2,11 @@
 
 An educational, production-quality open-source project demonstrating how an **agentic planning layer** (LangGraph + LLM) can orchestrate a **Vision-Language-Action (VLA) sensorimotor policy** (SmolVLA via Hugging Face LeRobot) for multi-step robot manipulation tasks.
 
+**Key components:**
+- [**LeRobot**](https://github.com/huggingface/lerobot) — HuggingFace's open-source robotics library providing datasets, training pipelines, and pre-trained robot policies.
+- [**SmolVLA**](https://huggingface.co/lerobot/smolvla_base) ([paper](https://arxiv.org/abs/2506.01844)) — A small Vision-Language-Action model that takes camera images and a natural-language instruction and outputs joint-space robot actions. Designed for SO-100 robot arms.
+- [**LangGraph**](https://github.com/langchain-ai/langgraph) — A framework for building stateful, multi-step LLM agent graphs. Used here to decompose goals into subtasks and orchestrate policy execution.
+
 > **No physical robot required.** The primary execution path uses public LeRobot-compatible datasets, offline/replay evaluation, and deterministic mocks. Hardware integration is optional future work behind isolated adapters.
 
 ---
@@ -43,6 +48,23 @@ Observation + result → verify → retry / replan / complete
 ```
 
 **The LLM layer never generates joint torques, servo positions, or high-frequency trajectories.** It operates exclusively at the goal and subtask level.
+
+---
+
+## Results to date
+
+M4 (fine-tuning infrastructure + training run) is the furthest milestone with measurable results. All numbers are from offline/replay evaluation on synthetic fixture episodes — see [docs/evaluation.md](docs/evaluation.md) for what this means and what it does not prove.
+
+| Milestone | What ran | Key result |
+|---|---|---|
+| M1 — Mock loop | Deterministic mock executor | Graph routing, retry, safety gate all testable without GPU |
+| M2 — Replay backend | Fixture episode replayer | Episode splitter, replay policy, and environment infrastructure verified |
+| M3 — SmolVLA baseline | SmolVLA adapter on fixture episodes | Base model produces valid 6-D float32 actions; accuracy not yet meaningful (fixture data only) |
+| M4 — Fine-tuning | 10 k-step MPS training run on `svla_so100_pickplace` | L1 error: 0.1893 → 0.1436 (−24%) vs base; L1 std halved |
+
+**M4 caveat:** The −24% L1 improvement is measured on 3 synthetic fixture episodes, not on real held-out episodes from `svla_so100_pickplace`. Lower prediction error on fixtures does not prove closed-loop task success. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.
+
+The core research comparison (VLA-only vs coarse agentic vs fine agentic) is Milestone 6 and has not yet run.
 
 ---
 
