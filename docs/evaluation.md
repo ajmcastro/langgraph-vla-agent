@@ -116,9 +116,9 @@ Milestone 3 adds `SmolVLAPolicyAdapter`, `OfflineEvaluator`, and action-predicti
 
 **What M3 does NOT prove:**
 
-- That `lerobot/smolvla_base` makes good predictions on `svla_so100_pickplace` (requires the [vla] extra, a GPU, and the actual dataset — tested separately via `SMOLVLA_INTEGRATION_TESTS=1`).
+- That `lerobot/smolvla_base` makes *good* predictions on `svla_so100_pickplace`. The integration tests (`SMOLVLA_INTEGRATION_TESTS=1`) only verify that the model produces *valid* outputs (correct shape, finite values) — not that the predictions are close to ground truth. Meaningful accuracy requires running `make evaluate-policy` against the actual held-out dataset split, which is M4 work.
 - That low action prediction error implies task success in closed-loop execution (requires simulation or hardware).
-- That the SmolVLA model generalises beyond the 50 fixture-adjacent episodes.
+- That the SmolVLA model generalises beyond the 3 synthetic fixture episodes used in unit and script tests (the fixtures are hand-crafted JSON files, not real robot data from `svla_so100_pickplace`).
 
 All M3 evaluation results are labeled `evaluation_mode=REPLAY` and carry `OfflineEvalResult.evaluation_note` stating the closed-loop limitation explicitly.
 
