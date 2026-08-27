@@ -170,6 +170,44 @@ None of these claims require a GPU, network, dataset, or robot. They prove softw
 
 ---
 
+## What fine-tuning comparison proves in M4
+
+Milestone 4 adds `SmolVLATrainingConfig`, `TrainingRunProvenance`, `CheckpointComparisonResult`, and `compare_checkpoints()`. The comparison infrastructure is testable without a GPU:
+
+| Claim | How it is tested |
+|---|---|
+| `SmolVLATrainingConfig` rejects invalid hyperparameters (batch_size=0, steps<0, eval_split≥1) | `test_rejects_zero_batch_size`, `test_rejects_negative_steps`, `test_rejects_eval_split_ge_one` |
+| `lerobot_train_args()` produces the correct CLI argument list | `test_lerobot_train_args_contains_required_keys`, `test_lerobot_train_args_includes_revision_when_set` |
+| `lerobot_train_command()` produces a multi-line shell command | `test_lerobot_train_command_is_multiline_string` |
+| `TrainingRunProvenance` round-trips through JSON without data loss | `test_provenance_round_trip` |
+| `compare_checkpoints()` returns `delta=0` when both policies are identical | `test_delta_is_zero_when_both_policies_identical` |
+| `compare_checkpoints()` returns negative delta when fine-tuned is better | `test_negative_delta_when_finetuned_is_better` |
+| `compare_checkpoints()` returns positive delta when fine-tuned is worse | `test_positive_delta_when_finetuned_is_worse` |
+| `improvement_pct_l1 = 0.0` (not a crash) when base L1 = 0 | `test_improvement_pct_zero_when_base_l1_is_zero` |
+| `CheckpointComparisonResult` carries a structural `evaluation_note` | `test_comparison_result_has_evaluation_note` |
+
+**M4 training run completed (2026-08-27):**
+
+Training ran for 10,000 steps on Apple M4 Max (MPS) in 2 h 23 min at $0 cost. Comparison against `lerobot/smolvla_base` on 3 synthetic fixture episodes:
+
+| Metric | Base | Fine-tuned | Delta |
+|---|---|---|---|
+| L1 mean | 0.1893 | 0.1436 | −0.046 (−24%) |
+| L2 mean | 0.2175 | 0.1812 | −0.036 |
+| L1 std | 0.0481 | 0.0225 | halved |
+
+Full provenance: `data/provenance/training/smolvla_so100_m4.yaml`.
+
+**What M4 still does NOT prove:**
+
+- That the 24% L1 improvement holds on real held-out episodes from `svla_so100_pickplace` (fixture episodes are synthetic — evaluating on real test-split episodes requires downloading the full dataset and building a `HubEpisodeStore` or similar).
+- That lower L1/L2 error translates to higher task success (requires simulation or hardware — M7+).
+- That the training config is optimal (10 k steps on MPS is a reasonable baseline, not a tuned recipe; a cloud CUDA run at full batch size may produce different results).
+
+All comparison results are labeled `evaluation_mode=REPLAY` and carry `CheckpointComparisonResult.evaluation_note`.
+
+---
+
 ## Anti-patterns to avoid
 
 - Reporting simulation or offline results as "robot performance"

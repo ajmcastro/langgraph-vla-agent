@@ -158,7 +158,65 @@ lerobot 0.6 removed the `common/` prefix from its package layout. The correct im
 
 These three fixes were driven by actual runtime errors against the installed package, not assumptions. They are load-bearing details for M4 fine-tuning and any future checkpoint swap.
 
-## Milestone 4 — (Pending)
+## Milestone 4 — Cloud GPU fine-tuning
+
+### SmolVLATrainingConfig: our schema over lerobot's TrainPipelineConfig
+
+**Decision:** M4 defines its own Pydantic `SmolVLATrainingConfig` rather than directly using lerobot's `TrainPipelineConfig` dataclass.
+
+**Why:** lerobot's config uses `draccus` (a dataclass-based CLI parser), not Pydantic. It cannot be serialized to JSON, validated at construction time, or embedded inside `TrainingRunProvenance` as a typed field. Our schema serves a different purpose — reproducibility and provenance — while `lerobot_train_args()` translates it into the actual CLI invocation. If lerobot's CLI changes, only `lerobot_train_args()` needs updating; the provenance schema stays stable.
+
+### lerobot-train CLI entry point
+
+**Decision:** The training script calls `lerobot-train` via subprocess, not lerobot's Python API.
+
+**Why:** lerobot 0.6.1 exposes training via a `draccus`-decorated CLI entry point (`lerobot-train`), not a stable importable Python function. Calling via subprocess is more robust across lerobot minor versions — the command-line contract changes less frequently than internal Python APIs. A `--dry-run` flag prints the command without executing, enabling pre-flight validation on local machines without a GPU.
+
+### eval_split vs test split — two separate holdouts
+
+**Decision:** `eval_split` (a `DatasetConfig` field in lerobot) holds out a fraction of episodes for online val-loss monitoring *during* training. The test split used for the final base-vs-fine-tuned comparison is a separate holdout managed by `compare_checkpoints.py`.
+
+**Why:** These serve different purposes. The val split detects overfitting mid-training and influences early stopping. The test split must never be seen during training in any form (not even for val-loss), so the honest comparison is fully uncontaminated. With 50 episodes, keeping them separate is even more important — using the same data for both would make the comparison meaningless.
+
+### CheckpointComparisonResult: testable without a trained model
+
+**Decision:** `compare_checkpoints()` accepts any `RobotPolicy`, including stubs. `make compare-checkpoints` runs in fixture mode (stub policies, no GPU) to verify infrastructure.
+
+**Why:** The actual training run requires cloud GPU access and takes hours. The comparison infrastructure should be developed, tested, and confident *before* spending compute budget. Fixture mode verifies that `OfflineEvaluator` is called correctly for both policies, delta metrics are computed correctly, and `CheckpointComparisonResult` serializes cleanly — all without a trained checkpoint.
+
+### Camera key mismatch: resolved via rename_map
+
+**Decision:** The M3 camera key mismatch (dataset uses `observation.image.front`; base model expects `camera1/2/3`) is resolved by `rename_map: {"observation.image.front": "observation.images.camera1"}` in `configs/training/smolvla_so100.yaml` and the corresponding `rename_map` field in `SmolVLATrainingConfig`. The config emits `--rename_map=<json>` to `lerobot-train`.
+
+**Why:** lerobot's `TrainPipelineConfig` has a `rename_map: dict[str, str]` field that remaps dataset observation keys to the names the policy expects at training time. This is the lerobot-native solution: the mapping is applied before any batch construction, so the fine-tuned checkpoint will use `observation.images.camera1` (the base model's key) rather than the dataset's `observation.image.front`. Discovered by inspecting `lerobot-train --help` output and `TrainPipelineConfig` source during `make train` debugging. This was the correct fix — adding evidence before acting (running a broken `make train`) surfaced the exact mechanism.
+
+### lerobot-train CLI arg format: `--key=value` (draccus requires double-dash prefix)
+
+**Decision:** All args passed to `lerobot-train` use the `--key=value` format (double-dash prefix). `push_to_hub` is scoped to the policy as `--policy.push_to_hub=false`.
+
+**Why:** Discovered empirically by running `make train` and getting exit code 2. draccus (the arg-parsing library lerobot uses) requires `--key=value` format; bare `key=value` strings are silently unrecognised. Three specific corrections were needed:
+1. All args need `--` prefix (`--batch_size=8`, not `batch_size=8`).
+2. Policy loading uses `--policy.type=smolvla` (select architecture) + `--policy.pretrained_path=<id>` (load weights), not the non-existent `policy.path`.
+3. `push_to_hub` lives under the policy config (`--policy.push_to_hub=false`), not at the top level — lerobot's default is `push_to_hub=True`, which triggers a `ValueError` if `repo_id` is not also set.
+
+### Do not pre-create the output directory before calling lerobot-train
+
+**Decision:** `scripts/train_smolvla.py` does not call `out_dir.mkdir(parents=True, exist_ok=True)` before invoking `lerobot-train`.
+
+**Why:** lerobot's `TrainPipelineConfig.validate()` raises `FileExistsError` if the output directory already exists and `resume=False`. An early `mkdir` from our script triggers this error on the very first run. The fix was simply to remove the pre-creation — lerobot creates the directory itself. If resuming an interrupted run, pass `--resume=true` (a lerobot flag), not by pre-creating the directory.
+
+### Checkpoint path structure: `checkpoints/<step>/pretrained_model/`
+
+**Decision:** The `--finetuned` argument to `compare_checkpoints.py --mode vla` must point to `artifacts/training/<run_name>/checkpoints/<step>/pretrained_model/`, not the run root.
+
+**Why:** lerobot saves each checkpoint in its own numbered subdirectory (`checkpoints/010000/pretrained_model/`), following the `save_freq` schedule. The run root directory does not itself contain a `config.json`, so passing the root path raises `FileNotFoundError`. `make compare-checkpoints-vla` hardcodes the final step path (`010000`) for reproducibility.
+
+### M4 training result (2026-08-27, Apple M4 Max MPS)
+
+10,000 steps on MPS completed in 2 h 23 min at $0 cost. L1 error on 3 synthetic fixture episodes: base=0.1893, fine-tuned=0.1436, delta=−24%. L1 std halved (0.048 → 0.023), indicating more consistent predictions. Provenance: `data/provenance/training/smolvla_so100_m4.yaml`.
+
+---
+
 ## Milestone 5 — (Pending)
 ## Milestone 6 — (Pending)
 ## Milestone 7 — (Pending)

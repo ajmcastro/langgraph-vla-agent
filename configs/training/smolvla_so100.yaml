@@ -1,0 +1,66 @@
+# Training configuration for SmolVLA fine-tuning on lerobot/svla_so100_pickplace.
+#
+# Validated by: scripts/train_smolvla.py (SmolVLATrainingConfig Pydantic schema)
+# Requires:     make setup-vla  (lerobot[smolvla,dataset] extra)
+# Run locally:  make train
+# Run on cloud: make train-cloud  (set hf_jobs_target below)
+#
+# ─── Hardware notes ──────────────────────────────────────────────────────────
+# NVIDIA GPU (≥16 GB VRAM, e.g. A10G, L40S):
+#   Default settings below. Expect ~2-3 hours for 10k steps.
+#
+# Apple Silicon (M-series, MPS):
+#   Change device to "mps". batch_size may need to drop to 4 if OOM.
+#   Full training not recommended locally — use as a smoke-test only.
+#
+# CPU only:
+#   Change device to "cpu". Extremely slow; use --dry-run for config validation.
+#
+# ─── Dataset note (M3/M4 finding) ────────────────────────────────────────────
+# svla_so100_pickplace uses key "observation.image.front" at 640x480.
+# smolvla_base expects "observation.images.camera1/2/3" at 256x256.
+# rename_map below remaps the dataset key to the policy key at training time.
+# lerobot handles resize internally; the fine-tuned checkpoint will use
+# "observation.images.camera1" as its image key.
+#
+# ─── Data leakage note ───────────────────────────────────────────────────────
+# eval_split (0.15) holds out ~7-8 episodes for val-loss monitoring INSIDE
+# lerobot. The held-out test split for the final base-vs-fine-tuned comparison
+# is separate and managed by scripts/compare_checkpoints.py.
+# ─────────────────────────────────────────────────────────────────────────────
+
+run_name: smolvla_so100_m4
+
+base_model_id: lerobot/smolvla_base
+base_model_revision: null  # null = latest at training time; record resolved hash in provenance
+
+dataset_id: lerobot/svla_so100_pickplace
+dataset_revision: "728583b5eaf9e739a7f119e2def466fa1d552402"
+train_episodes: null   # null = all episodes minus eval_split fraction
+eval_split: 0.15       # fraction held out for val-loss monitoring (~7 of 50 episodes)
+
+batch_size: 8
+steps: 10000
+seed: 42
+save_freq: 2500        # checkpoint every 2500 steps (4 checkpoints + final)
+
+device: cuda
+output_dir: artifacts/training
+
+push_to_hub: false
+hf_entity: null        # set to your HF username/org when push_to_hub is true
+
+wandb_enable: false
+wandb_project: langgraph-vla-agent
+
+# Camera key remapping: maps dataset observation keys to policy-expected keys.
+# Required because svla_so100_pickplace uses "observation.image.front" but
+# smolvla_base expects "observation.images.camera1".
+rename_map:
+  "observation.image.front": "observation.images.camera1"
+
+# HF Jobs cloud GPU — set to a flavor string to run remotely instead of locally.
+# Run `hf jobs hardware` to see available flavors and pricing.
+# Example: "nvidia-l40s-x1" (~$2-3/hr as of mid-2025)
+hf_jobs_target: null
+hf_jobs_timeout: 8h

@@ -50,9 +50,9 @@ Observation + result → verify → retry / replan / complete
 
 | Environment | Purpose | Status |
 |---|---|---|
-| MacBook Pro M4 Max (64 GB) | Development, tests, mock/replay eval, dataset inspection | Primary |
-| Cloud NVIDIA GPU | SmolVLA fine-tuning, batch eval, checkpoint export | Milestone 4+ |
-| Physical robot (SO-101) | Optional hardware validation | Future work only |
+| MacBook Pro M4 Max (64 GB) | Development, tests, mock/replay eval, dataset inspection, MPS training | Primary |
+| Cloud NVIDIA GPU | Large-scale training, full-batch fine-tuning, checkpoint export | Optional (M4+) |
+| Physical robot (SO-101) | Hardware validation | Future work only |
 
 ---
 
@@ -82,6 +82,34 @@ make check
 make test-unit        # fast, no external deps
 make test             # all non-hardware tests
 ```
+
+### Fine-tuning SmolVLA (Milestone 4)
+
+```bash
+# Validate the training config without running training (no GPU needed):
+make validate-train-config
+
+# Compare two checkpoints in fixture mode (no GPU, no trained model needed):
+make compare-checkpoints
+
+# Run training locally (requires [vla] extra + CUDA or MPS GPU):
+make train
+
+# Compare real checkpoints after training (uses the final step-10000 checkpoint):
+make compare-checkpoints-vla
+```
+
+For cloud GPU training via HF Jobs, set `hf_jobs_target` in [`configs/training/smolvla_so100.yaml`](configs/training/smolvla_so100.yaml) to your chosen hardware flavor (e.g. `nvidia-l40s-x1`), then run `make train-cloud`.
+
+**Completed M4 run (2026-08-27, Apple M4 Max MPS):**
+
+| Metric | Base | Fine-tuned | Delta |
+|---|---|---|---|
+| L1 mean | 0.1893 | 0.1436 | -0.046 (−24%) |
+| L2 mean | 0.2175 | 0.1812 | -0.036 |
+| Wall-clock | — | — | 2 h 23 min / 10 k steps |
+
+*Evaluated on 3 synthetic fixture episodes. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.*
 
 ### Running offline policy evaluation (Milestone 3)
 
@@ -125,7 +153,7 @@ uv pip install --torch-backend cu128 lerobot
 | 1 | Domain contracts and deterministic mock loop | ✅ Complete |
 | 2 | Public dataset inspection and replay backend | ✅ Complete |
 | 3 | SmolVLA baseline | ✅ Complete |
-| 4 | Cloud GPU fine-tuning | Pending |
+| 4 | Cloud GPU fine-tuning | ✅ Complete (trained on MPS, 24% L1 improvement) |
 | 5 | LangGraph orchestration | Pending |
 | 6 | Planning-granularity experiments | Pending |
 | 7 | Optional closed-loop simulation | Pending |

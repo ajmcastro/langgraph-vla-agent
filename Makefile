@@ -9,7 +9,8 @@
 .PHONY: help setup sync setup-datasets setup-agent setup-vla \
         format lint typecheck test test-unit test-integration \
         check inspect-data evaluate-mock evaluate-replay evaluate-policy \
-        evaluate-agent train run-demo clean
+        evaluate-agent train train-cloud validate-train-config \
+        compare-checkpoints compare-checkpoints-vla run-demo clean
 
 PYTHON := uv run python
 UV     := uv
@@ -109,10 +110,28 @@ evaluate-agent:
 # Training (Milestone 4+, Cloud GPU required)
 # ---------------------------------------------------------------------------
 
-## train: [OPTIONAL][CLOUD GPU] Fine-tune SmolVLA on the selected dataset
+## validate-train-config: Validate training YAML without running training
+validate-train-config:
+	$(PYTHON) scripts/train_smolvla.py --dry-run
+
+## train: [OPTIONAL][GPU] Fine-tune SmolVLA locally (requires GPU + vla extra)
 train:
-	@echo "Milestone 4 target — requires cloud GPU and VLA extra"
-	@echo "See docs/data.md and docs/evaluation.md for setup instructions"
+	$(PYTHON) scripts/train_smolvla.py
+
+## train-cloud: [OPTIONAL][CLOUD GPU] Submit SmolVLA fine-tuning to HF Jobs
+train-cloud:
+	$(PYTHON) scripts/train_smolvla.py --config configs/training/smolvla_so100.yaml
+
+## compare-checkpoints: Compare base vs fine-tuned checkpoint (fixture mode, no GPU)
+compare-checkpoints:
+	$(PYTHON) scripts/compare_checkpoints.py --mode fixture
+
+## compare-checkpoints-vla: [OPTIONAL][GPU] Compare base vs fine-tuned with real VLA models
+compare-checkpoints-vla:
+	$(PYTHON) scripts/compare_checkpoints.py \
+		--mode vla \
+		--base lerobot/smolvla_base \
+		--finetuned artifacts/training/smolvla_so100_m4/checkpoints/010000/pretrained_model
 
 # ---------------------------------------------------------------------------
 # Demo (Milestone 8+)
