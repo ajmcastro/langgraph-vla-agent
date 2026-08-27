@@ -83,6 +83,20 @@ make test-unit        # fast, no external deps
 make test             # all non-hardware tests
 ```
 
+### Running offline policy evaluation (Milestone 3)
+
+```bash
+# Mock evaluation — no GPU or dataset needed
+make evaluate-mock
+
+# Replay evaluation on fixture episodes — no GPU needed
+make evaluate-replay
+
+# VLA evaluation — requires [vla] extra and model download (~500 MB)
+make setup-vla
+make evaluate-policy
+```
+
 ### Adding optional extras (later milestones)
 
 ```bash
@@ -110,7 +124,7 @@ uv pip install --torch-backend cu128 lerobot
 | 0 | Foundation and verified project plan | ✅ Complete |
 | 1 | Domain contracts and deterministic mock loop | ✅ Complete |
 | 2 | Public dataset inspection and replay backend | ✅ Complete |
-| 3 | SmolVLA baseline | Pending |
+| 3 | SmolVLA baseline | ✅ Complete |
 | 4 | Cloud GPU fine-tuning | Pending |
 | 5 | LangGraph orchestration | Pending |
 | 6 | Planning-granularity experiments | Pending |

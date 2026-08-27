@@ -96,6 +96,34 @@ Results are reported with mean ± std and sample size. Statistical tests are app
 
 ---
 
+## What offline evaluation proves in M3
+
+Milestone 3 adds `SmolVLAPolicyAdapter`, `OfflineEvaluator`, and action-prediction error metrics. With M3 running, these claims are testable and verifiable **without a GPU, network, or robot**:
+
+| Claim | How it is tested |
+|---|---|
+| `SmolVLAPolicyAdapter` satisfies `RobotPolicy` protocol (structurally) | `test_smolvla_adapter_satisfies_robot_policy_protocol` |
+| `SmolVLAPolicyAdapter` accepts a test stub via `_model` injection (no [vla] needed) | `test_smolvla_adapter_accepts_stub_without_vla` |
+| `reset()` delegates to the underlying model's `reset()` | `test_reset_calls_model_reset` |
+| `act()` returns a 6-D float32 `RobotAction` | `test_act_returns_correct_dim`, `test_act_returns_float32` |
+| `act()` creates a black dummy image when no camera image is present | `test_act_handles_observation_without_image` |
+| `OfflineEvaluator` produces L1=0 when `ReplayRobotPolicy` is used (baseline sanity check) | `test_offline_evaluator_zero_error_with_replay_policy` |
+| `OfflineEvaluator` produces L1>0 when a stub predicts zeros against non-zero recorded actions | `test_offline_evaluator_nonzero_error_with_stub` |
+| L1 and L2 values match manual calculation | `test_l1_l2_error_values_are_correct` |
+| Every `OfflineEvalResult` carries a structural disclaimer | `evaluation_note` field, `test_offline_eval_result_always_has_evaluation_note` |
+| `ActionErrorMetrics` rejects negative means, stds, and step counts | `test_action_error_metrics_rejects_negative_*` |
+| Aggregate covers all steps across multiple episodes | `test_offline_evaluator_aggregates_multiple_episodes` |
+
+**What M3 does NOT prove:**
+
+- That `lerobot/smolvla_base` makes good predictions on `svla_so100_pickplace` (requires the [vla] extra, a GPU, and the actual dataset — tested separately via `SMOLVLA_INTEGRATION_TESTS=1`).
+- That low action prediction error implies task success in closed-loop execution (requires simulation or hardware).
+- That the SmolVLA model generalises beyond the 50 fixture-adjacent episodes.
+
+All M3 evaluation results are labeled `evaluation_mode=REPLAY` and carry `OfflineEvalResult.evaluation_note` stating the closed-loop limitation explicitly.
+
+---
+
 ## What replay evaluation proves in M2
 
 With the M2 replay backend running, these claims are testable and verifiable:

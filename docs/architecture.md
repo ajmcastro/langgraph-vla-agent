@@ -103,7 +103,7 @@ Implementations (introduced per milestone):
 |---|---|---|
 | `MockRobotPolicy` | none | Deterministic scripted behavior for agent tests |
 | `ReplayRobotPolicy` | none (local files) | Replays recorded actions for offline evaluation |
-| `SmolVLAPolicyAdapter` | `lerobot[smolvla]`, GPU | Actual SmolVLA inference |
+| `SmolVLAPolicyAdapter` | `lerobot[smolvla,dataset]`, GPU | Actual SmolVLA inference |
 
 Hardware adapters are isolated in `src/langgraph_vla_agent/policies/hardware/` and are never imported by core agent or evaluation code.
 

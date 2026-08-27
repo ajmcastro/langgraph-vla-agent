@@ -108,8 +108,56 @@ Design decisions made at each milestone boundary — the "why" that should survi
 
 **Why:** `[vla]` pulls in all of LeRobot and PyTorch (gigabytes). Dataset metadata inspection only needs `huggingface_hub` (~MB). Separating these lets contributors run `make inspect-data` to fetch Hub metadata without setting up the full ML stack. `HubDatasetInspector` guards its import with a `try/except ImportError` and raises a clear message if the extra is missing.
 
-## Milestone 3 — (Pending)
-## Milestone 3 — (Pending)
+## Milestone 3 — SmolVLA baseline and offline evaluation
+
+### SmolVLAPolicyAdapter: adapter over ABC
+
+**Decision:** `SmolVLAPolicyAdapter` satisfies `RobotPolicy` via structural typing (Protocol), not by inheriting from it.
+
+**Why:** The same argument as M1 Protocols — future checkpoints or alternative VLA models can satisfy the interface without importing from the agent codebase. The adapter holds `self._model: _SmolVLAModel` (an internal Protocol), so the real `SmolVLAPolicy` and the test stub `_StubSmolVLAModel` are interchangeable at the adapter boundary.
+
+### Dependency injection via `_model` for unit tests
+
+**Decision:** `SmolVLAPolicyAdapter.__init__` accepts a `_model` keyword argument that bypasses the lerobot import entirely. `_StubSmolVLAModel` (defined in the same module) satisfies the internal `_SmolVLAModel` Protocol and returns zero vectors.
+
+**Why:** The [vla] extra requires a CUDA or Apple-Silicon GPU and a ~500 MB model download. Unit tests must run on any developer laptop without those requirements. Dependency injection is the minimal, non-fragile way to achieve this — no monkeypatching, no mocking `import lerobot`, no conftest magic.
+
+### OfflineEvaluator is separate from Executor
+
+**Decision:** Action prediction error is computed in `OfflineEvaluator`, which runs its own per-step loop. It does not reuse `Executor`.
+
+**Why:** `Executor.run()` returns a single opaque `ExecutionResult` — there is no hook for per-step inspection of policy outputs. The evaluator needs to see every predicted action alongside the corresponding ground-truth action to compute L1/L2 error. Exposing this through the Executor would require adding evaluation-specific logic to a general-purpose component, violating the layered separation. The cleaner design is a dedicated evaluation class that owns the comparison loop.
+
+### L1 and L2 error: per-step scalars, aggregated across episodes
+
+**Decision:** At each step, L1 = `mean(|predicted - gt|)` and L2 = `sqrt(mean((predicted - gt)²))` over action dimensions. These are then aggregated (mean ± std) across all steps of all evaluated episodes.
+
+**Why:** Computing per-step scalars (not per-joint arrays) keeps `ActionErrorMetrics` simple and readable in logs. Aggregating across all steps (not per-episode means of means) gives the correct overall statistics — each step is equally weighted regardless of episode length. Both metrics are standard in offline imitation learning evaluation and directly comparable to the SmolVLA paper's reported baselines.
+
+### Structural evaluation_note in OfflineEvalResult
+
+**Decision:** `OfflineEvalResult` has a `evaluation_note: str = _OFFLINE_NOTE` field with a default value. It cannot be set to an empty string by normal construction.
+
+**Why:** The fundamental limitation of offline evaluation — that it cannot measure closed-loop counterfactual behavior — must be structurally attached to every result object. If it were only in documentation, it would be easy to strip when reporting metrics. Making it a model field ensures that any consumer (a script, a report generator, a future M6 dashboard) sees the limitation alongside the numbers.
+
+### lerobot 0.6.1 API differences discovered during M3
+
+Three deviations from the originally anticipated API were found when running `make evaluate-policy` against the installed lerobot 0.6.1. These required fixes to `SmolVLAPolicyAdapter._build_batch`.
+
+**1. Import path changed — `lerobot.common.policies` no longer exists.**
+
+lerobot 0.6 removed the `common/` prefix from its package layout. The correct import is `lerobot.policies.smolvla.modeling_smolvla`. The fix is a one-line change in the adapter; the `lerobot.*` mypy override already covers both paths.
+
+**2. Image keys and shapes are checkpoint-specific, not dataset-generic.**
+
+`smolvla_base` expects `observation.images.camera1/2/3` at shape `(3, 256, 256)`, not `observation.images.front` at `(3, 480, 640)` as the SO-100 dataset documentation suggests. `_build_batch` now introspects `model.config.image_features` to discover the expected keys and shapes at runtime, building a dummy black image for each key the checkpoint declares. This makes the adapter portable across checkpoints without hardcoding any key or size.
+
+**3. Language input must be pre-tokenized; `select_action` does not accept raw strings.**
+
+`SmolVLAPolicy.select_action` reads `observation.language.tokens` (Long tensor) and `observation.language.attention_mask` (**boolean** tensor) directly from the batch. It does not accept a `task` string and tokenize internally. `_build_batch` now retrieves the GPT-2 tokenizer from `model.model.vlm_with_expert.processor.tokenizer` at init time, tokenizes the instruction, and adds both tensors. The attention mask must be `.bool()` — passing a Long (0/1) mask causes a `RuntimeError` inside the model's attention implementation.
+
+These three fixes were driven by actual runtime errors against the installed package, not assumptions. They are load-bearing details for M4 fine-tuning and any future checkpoint swap.
+
 ## Milestone 4 — (Pending)
 ## Milestone 5 — (Pending)
 ## Milestone 6 — (Pending)

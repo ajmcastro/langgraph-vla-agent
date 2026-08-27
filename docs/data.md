@@ -22,12 +22,22 @@ The following candidates are identified from public documentation and verified l
 | Task | Pick-and-place (cube → bin) |
 | Episodes | 50 (10 per cube position × 5 positions) |
 | Language | Natural language task descriptions per episode |
-| Cameras | Front camera (640×480, 30 fps) |
+| Cameras | Front camera (640×480, 30 fps) — dataset key `observation.image.front` |
 | Action space | SO100 joint positions (6-DOF arm) |
 | Provenance | Used in the SmolVLA paper (arXiv:2506.01844) |
 | License | To be verified in M2 — expected Apache 2.0 or MIT per HF LeRobot norms |
 | Compatibility | Designed for SmolVLA fine-tuning; action/obs modalities match `smolvla_base` |
 | Risks | 50 episodes is small for generalisation experiments; scene diversity limited to 5 cube positions |
+
+> **M3 finding — image key mismatch:** `smolvla_base` (lerobot 0.6.1) expects
+> `observation.images.camera1/2/3` at `(3, 256, 256)`, not `observation.image.front` at
+> `(3, 480, 640)`. `SmolVLAPolicyAdapter` introspects `model.config.image_features` at
+> runtime so it always sends whatever the loaded checkpoint declares. When running against
+> fixture episodes (which have no camera images) the adapter creates dummy black images of
+> the correct shape. This discrepancy between dataset and base-model camera conventions
+> must be resolved before M4 fine-tuning — likely by using the correct dataset split that
+> the base model was actually trained on, or by preprocessing the dataset images to the
+> model's expected resolution and key names.
 
 **Why this dataset?** It is the reference dataset from the SmolVLA paper, explicitly designed for the `smolvla_base` checkpoint we will use in Milestone 3. Using it gives a direct apples-to-apples comparison between the base model and our fine-tuned/orchestrated variants.
 

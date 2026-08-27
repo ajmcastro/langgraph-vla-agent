@@ -89,17 +89,17 @@ inspect-data:
 # Evaluation (Milestone 3+)
 # ---------------------------------------------------------------------------
 
-## evaluate-mock: Run mock/deterministic evaluation scenarios
+## evaluate-mock: Offline evaluation with MockRobotPolicy (no VLA extra needed)
 evaluate-mock:
-	@echo "Milestone 3 target — not yet implemented"
+	$(PYTHON) scripts/evaluate_policy.py --mode mock
 
-## evaluate-replay: [OPTIONAL] Offline replay evaluation on held-out episodes
+## evaluate-replay: Offline evaluation with ReplayRobotPolicy on fixture episodes
 evaluate-replay:
-	@echo "Milestone 3 target — not yet implemented"
+	$(PYTHON) scripts/evaluate_policy.py --mode replay
 
-## evaluate-policy: [OPTIONAL] VLA policy evaluation (requires vla extra + model checkpoint)
+## evaluate-policy: [OPTIONAL] VLA policy evaluation (requires vla extra + model download)
 evaluate-policy:
-	@echo "Milestone 3 target — not yet implemented"
+	$(PYTHON) scripts/evaluate_policy.py --mode vla
 
 ## evaluate-agent: [OPTIONAL] Full agent evaluation (requires agent + vla extras)
 evaluate-agent:

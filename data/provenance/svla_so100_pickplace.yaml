@@ -4,15 +4,17 @@
 
 dataset:
   hub_id: lerobot/svla_so100_pickplace
-  revision: 728583b5eaf9e739a7f119e2def466fa1d552402"          # TODO: fill in exact commit hash after Hub inspection (make inspect-data)
+  revision: 728583b5eaf9e739a7f119e2def466fa1d552402  # verified from Hub metadata in M2
   license_spdx: Apache-2.0  # per HuggingFace LeRobot norms; to be confirmed via Hub card
   episodes: 50            # 10 per cube position × 5 positions
   embodiment: so100
   action_dim: 6           # SO-100 6-DOF joint positions
   state_dim: 6            # proprioceptive state: 6 joint positions (radians)
   obs_keys:
-    - observation.image.front   # 640×480 RGB @ 30 fps
+    - observation.image.front   # 640×480 RGB @ 30 fps (dataset key)
     - observation.state         # 6-dim joint position vector
+  # M3 finding: smolvla_base (lerobot 0.6.1) expects observation.images.camera1/2/3 at
+  # (3, 256, 256), NOT observation.image.front at (3, 480, 640). Resolve before M4.
   language_field: task    # per-episode natural-language instruction string
   download_date: null     # filled in when dataset is first fetched locally
   notes: >
@@ -23,7 +25,9 @@ dataset:
 
 open_questions:
   - Confirm exact license from Hub dataset card (expected Apache-2.0)
-  - Record exact Hub revision (git commit hash) after first fetch
   - Verify language annotations are per-episode (not per-task-type)
   - Measure on-disk size of parquet + video frames
-  - Check compatibility with lerobot[dataset] streaming API schema version
+  - Resolve camera key mismatch for M4: dataset uses observation.image.front (640x480)
+    but smolvla_base expects observation.images.camera1/2/3 (256x256). Determine
+    whether to (a) use a preprocessed dataset split, (b) resize+rename at load time,
+    or (c) fine-tune on a different checkpoint that matches the dataset's camera layout.
