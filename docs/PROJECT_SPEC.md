@@ -1,4 +1,4 @@
-# LangGraph VLA Agent — Phase 4 Project Implementation Prompt
+# LangGraph VLA Agent — Project Implementation Prompt
 
 I want you to act as a **Staff-level Machine Learning Engineer, Robotics/Physical AI Engineer, and Agentic AI Architect** and help me build an educational but production-quality open-source project called **LangGraph VLA Agent**.
 
