@@ -217,7 +217,52 @@ These three fixes were driven by actual runtime errors against the installed pac
 
 ---
 
-## Milestone 5 — (Pending)
+## Milestone 5 — LangGraph orchestration
+
+### Protocol-based TaskPlanner and LanguageModel
+
+**Decision:** `TaskPlanner` and `LanguageModel` are `typing.Protocol` classes with `@runtime_checkable`. Both `DeterministicPlanner` and `LLMTaskPlanner` satisfy `TaskPlanner` structurally.
+
+**Why:** Same reasoning as M1 Protocols — structural subtyping lets tests inject any object with a compatible `plan()` method without importing from the planning package. This enables 15 deterministic-planner tests and 11 LLM-planner tests to run without langchain, langchain-anthropic, or any LLM key. The same pattern makes `AgentRunner` injectable with any future planner (LLM or otherwise) without touching the graph.
+
+### LangGraph import isolation in graph.py only
+
+**Decision:** Only `src/langgraph_vla_agent/agent/graph.py` imports from `langgraph`. All other agent modules (`state`, `nodes`, `config`, `safety`, `runner`) are importable without the `[agent]` extra.
+
+**Why:** The 30 node unit tests and 9 safety tests run under `make check` — the core dev gate that has no `[agent]` extra. If `nodes.py` or `state.py` imported from `langgraph`, those tests would fail on a fresh checkout. Isolation means the unit-test path stays zero-dependency. The 10 integration tests in `tests/integration/agent/` use `pytest.importorskip("langgraph")` and skip cleanly when the extra is absent.
+
+### Closure-based dependency injection into node functions
+
+**Decision:** `build_agent_graph()` wraps each node function in a closure that closes over the concrete `executor`, `planner`, `config`, and `checker`. Node functions in `nodes.py` accept these as keyword-only arguments.
+
+**Why:** LangGraph node functions have the signature `(state: AgentState) -> dict`. They cannot accept extra arguments at call time. Two alternatives were considered: (1) attach dependencies to the state TypedDict — rejected because state is a public data contract between nodes, not a dependency container, and LangGraph serializes state; (2) use class instances — rejected because they are harder to test independently. Closures are the minimal, non-magical solution: `nodes.py` functions are pure state-in / dict-out and independently testable; `graph.py` is the wiring layer.
+
+### AgentStatus as a separate enum from ExecutionStatus
+
+**Decision:** `AgentStatus` (RUNNING / COMPLETED / FAILED / SAFETY_STOP) is defined in `agent/state.py`. It is distinct from `ExecutionStatus` (SUCCESS / FAILURE / INVALID_ACTION / MAX_STEPS_EXCEEDED / POLICY_ERROR) in `domain/results.py`.
+
+**Why:** These enums operate at different timescales and have different consumers. `ExecutionStatus` describes the outcome of a single policy-execution loop for one subtask. `AgentStatus` describes the terminal state of the entire multi-subtask orchestration episode. Mixing them would force the graph layer to understand Executor internals, violating the layered separation. The `verify_result` node translates from `ExecutionStatus` to the appropriate `AgentStatus` transition.
+
+### Annotated[list[str], operator.add] for append fields in AgentState
+
+**Decision:** `completed_subtask_ids`, `failed_subtask_ids`, and `execution_history_references` use `Annotated[list[str], operator.add]` as their type in `AgentState`.
+
+**Why:** LangGraph's default state merging overwrites fields with the value returned by the node. A node that appends to a list must read the current list, extend it, and return the full new list — a read-before-write anti-pattern that breaks under concurrent execution and requires every node to know the full state. The `Annotated` reducer tells LangGraph to apply `operator.add` (list concatenation) on the returned list. Nodes return only the new items (`[subtask_id]`), and LangGraph merges them. This is the idiomatic LangGraph pattern for accumulator fields.
+
+### DeterministicPlanner with coarse/fine granularity
+
+**Decision:** `DeterministicPlanner` supports two granularity modes: `"coarse"` (2 subtasks: approach-and-grasp, move-and-place) and `"fine"` (5 subtasks: approach, grasp-and-lift, move-to-target, lower-and-place, release-and-retract).
+
+**Why:** M6's research question compares coarse vs fine agentic decomposition against VLA-only. To run that comparison, we need two concrete agentic conditions. The coarse plan mirrors the minimal subtask decomposition that a human might verbally describe. The fine plan breaks the same task into skills closer to the policy's training distribution (individual approach, grasp, move, place, release steps). Both are deterministic (no LLM call), reproducible, and testable — which is essential for the M6 comparison to be fair and repeatable.
+
+### Bounded retry and replan with fail-closed behavior
+
+**Decision:** `AgentConfig` has `max_retries: int` (per subtask) and `max_replans: int` (per episode). Exhausting both sets `final_status=FAILED`. There is no infinite retry.
+
+**Why:** Unbounded retry is unsafe in any agent system — it can loop indefinitely on a permanently failing state. Fail-closed is the correct default: if the agent cannot succeed within the configured budget, it halts and reports failure rather than continuing to consume resources. The bounds also make the graph termination-provable: the maximum path length is `max_replans × (subtasks × max_retries) + subtasks`, which is finite and computable from the config. This property is critical for the M6 experiment where all three conditions must be run with identical budgets.
+
+---
+
 ## Milestone 6 — (Pending)
 ## Milestone 7 — (Pending)
 ## Milestone 8 — (Pending)

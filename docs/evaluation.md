@@ -235,6 +235,45 @@ All comparison results are labeled `evaluation_mode=REPLAY` and carry `Checkpoin
 
 ---
 
+## What mock evaluation proves in M5
+
+Milestone 5 adds the full LangGraph StateGraph: `understand_goal → create_plan → select_next_subtask → safety_check → execute_policy → verify_result → diagnose_failure`, with retry/replan/fail terminal paths. All M5 claims are verified in mock mode — no LLM, no GPU, no dataset.
+
+### What M5 proves
+
+| Claim | How it is tested |
+|---|---|
+| `understand_goal` fails with FAILED status on empty or whitespace-only goals | `test_understand_goal_fails_empty_goal`, `test_understand_goal_fails_whitespace_only` |
+| `create_plan` delegates to the injected planner and returns a `TaskPlan` | `test_create_plan_produces_plan`, `test_create_plan_uses_injected_planner` |
+| `create_plan` sets FAILED status on `PlanningError` | `test_create_plan_wraps_planning_error` |
+| `select_next_subtask` picks the first pending subtask and skips completed ones | `test_select_next_subtask_returns_first_pending`, `test_select_next_subtask_skips_completed` |
+| `select_next_subtask` sets COMPLETED when all subtasks are done | `test_select_next_subtask_sets_completed_when_all_done` |
+| `safety_check` passes allowed verbs and rejects blocked terms | `test_safety_check_passes_valid_instruction`, `test_safety_check_rejects_blocked_instruction` |
+| `safety_check` sets SAFETY_STOP on rejection | `test_safety_check_rejects_blocked_instruction` |
+| `diagnose_failure` increments retry_count and subtask.attempt when retries remain | `test_diagnose_increments_retry_when_retries_remain`, `test_diagnose_increments_attempt_on_retry` |
+| `diagnose_failure` clears the plan and increments replan_count after max retries | `test_diagnose_triggers_replan_after_max_retries` |
+| `diagnose_failure` sets FAILED when both retries and replans are exhausted | `test_diagnose_fails_after_max_retries_and_replans` |
+| `DeterministicPlanner` produces 2 subtasks in coarse mode, 5 in fine mode | `test_coarse_plan_has_two_subtasks`, `test_fine_plan_has_five_subtasks` |
+| `DeterministicPlanner` raises `PlanningError` for unrecognised goals | `test_unknown_goal_raises_planning_error` |
+| `LLMTaskPlanner` parses valid JSON responses into `TaskPlan` | `test_parses_valid_json_response`, `test_subtask_instructions_match_llm_response` |
+| `LLMTaskPlanner` raises `PlanningError` on LLM failure, bad JSON, or empty subtask list | `test_raises_on_llm_call_failure`, `test_raises_on_invalid_json`, `test_raises_on_empty_subtask_list` |
+| Full compiled graph completes a pick-and-place goal in coarse mode (2 subtasks) | `test_agent_completes_pick_and_place_goal` |
+| Full compiled graph completes a goal in fine mode (5 subtasks) | `test_agent_completes_with_fine_granularity` |
+| Graph halts with SAFETY_STOP when a planner injects a blocked-keyword subtask | `test_agent_safety_stops_on_blocked_instruction` |
+| Graph exhausts retries and replans and returns FAILED | `test_agent_fails_after_exhausting_retries_and_replans` |
+| `execution_history_references` is appended by LangGraph for each subtask run | `test_agent_execution_history_is_recorded` |
+
+### What M5 does NOT prove
+
+- That the `DeterministicPlanner`'s subtask vocabulary matches what SmolVLA was trained on. The coarse plan (["approach and grasp", "move and place"]) and fine plan (5 steps) are keyword templates — they are plausible decompositions, not ground-truth instruction labels from `svla_so100_pickplace`. Whether these subtask instructions produce lower action error than the full goal string is the M6 experiment.
+- That the `LLMTaskPlanner` produces better plans than `DeterministicPlanner` for this task. It may — but the evidence requires running M6 with both planners against the same recorded episodes.
+- That retry and replan logic improves task success in closed-loop execution. The mock tests verify the *software behavior* (correct state transitions) but not the *performance impact* (whether a retry actually leads to success on a real task).
+- That the graph executes correctly in replay or VLA mode. M5 integration tests use `MockRobotPolicy` and `MockEnvironment`. Connecting the graph to `ReplayRobotPolicy`/`ReplayEnvironment` is M6 work.
+
+All M5 results are labeled `evaluation_mode=MOCK`.
+
+---
+
 ## Anti-patterns to avoid
 
 - Reporting simulation or offline results as "robot performance"

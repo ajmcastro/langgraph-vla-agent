@@ -61,8 +61,11 @@ M4 (fine-tuning infrastructure + training run) is the furthest milestone with me
 | M2 — Replay backend | Fixture episode replayer | Episode splitter, replay policy, and environment infrastructure verified |
 | M3 — SmolVLA baseline | SmolVLA adapter on fixture episodes | Base model produces valid 6-D float32 actions; accuracy not yet meaningful (fixture data only) |
 | M4 — Fine-tuning | 10 k-step MPS training run on `svla_so100_pickplace` | L1 error: 0.1893 → 0.1436 (−24%) vs base; L1 std halved |
+| M5 — LangGraph orchestration | Full StateGraph with DeterministicPlanner + MockRobotPolicy | Graph routing, retry/replan/fail paths, and safety gate verified in mock mode; 249 tests pass |
 
 **M4 caveat:** The −24% L1 improvement is measured on 3 synthetic fixture episodes, not on real held-out episodes from `svla_so100_pickplace`. Lower prediction error on fixtures does not prove closed-loop task success. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.
+
+**M5 note:** All results are in mock evaluation mode. The graph is wired to `MockRobotPolicy` and `MockEnvironment` — no LLM key or GPU needed. Connecting the graph to replay or VLA evaluation is M6 work.
 
 The core research comparison (VLA-only vs coarse agentic vs fine agentic) is Milestone 6 and has not yet run.
 
@@ -133,6 +136,24 @@ For cloud GPU training via HF Jobs, set `hf_jobs_target` in [`configs/training/s
 
 *Evaluated on 3 synthetic fixture episodes. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.*
 
+### Running the LangGraph agent (Milestone 5)
+
+```bash
+# Install the [agent] extra (adds LangGraph + langchain-core):
+make setup-agent
+
+# Run a single pick-and-place episode in coarse mode (2 subtasks):
+make evaluate-agent
+
+# Run in fine-grained mode (5 subtasks):
+make evaluate-agent-fine
+
+# Run with a custom goal:
+uv run python scripts/run_agent.py --goal "pick up the cube and place it in the bin"
+```
+
+No LLM key or GPU is needed — the agent uses `DeterministicPlanner` and `MockRobotPolicy` by default. The output includes what the run proves and what it does not prove.
+
 ### Running offline policy evaluation (Milestone 3)
 
 ```bash
@@ -176,7 +197,7 @@ uv pip install --torch-backend cu128 lerobot
 | 2 | Public dataset inspection and replay backend | ✅ Complete |
 | 3 | SmolVLA baseline | ✅ Complete |
 | 4 | Cloud GPU fine-tuning | ✅ Complete (trained on MPS, 24% L1 improvement) |
-| 5 | LangGraph orchestration | Pending |
+| 5 | LangGraph orchestration | ✅ Complete (full StateGraph with retry/replan/safety; 249 tests) |
 | 6 | Planning-granularity experiments | Pending |
 | 7 | Optional closed-loop simulation | Pending |
 | 8 | Portfolio hardening | Pending |

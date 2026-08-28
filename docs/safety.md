@@ -8,49 +8,41 @@ Physical safety concerns are documented in the "Future hardware considerations" 
 
 ---
 
-## Software safety layer (implemented in mock and replay modes)
+## Software safety layer (implemented in M5 — mock mode)
 
-### Task allowlist
+### Instruction allowlist and blocklist (implemented: `SafetyChecker`)
 
-The agent accepts only tasks from an allowlisted set of skill categories. Tasks outside the allowlist trigger a `TASK_NOT_ALLOWED` safety stop before any planning or execution begins. This prevents the orchestration layer from being used as a general-purpose actuator controller.
+`src/langgraph_vla_agent/agent/safety.py` implements a two-rule gate applied to every subtask instruction before execution:
 
-Example allowlisted categories (configurable per deployment):
-- pick-and-place
-- push
-- grasp-and-release
-- open/close gripper
+1. **Blocked terms:** if the instruction contains any word from a blocklist (e.g. `human`, `person`, `face`, `sharp`, `blade`, `knife`, `fire`, `weapon`), the subtask is immediately rejected.
+2. **Allowed verbs:** the instruction must contain at least one verb from an allowlist (e.g. `approach`, `grasp`, `pick`, `lift`, `place`, `push`, `pull`, `open`, `close`). Instructions with no recognised manipulation verb are rejected.
 
-### Bounded execution
+Rejection sets `final_status = AgentStatus.SAFETY_STOP` and halts the episode. The safety gate is wired between `select_next_subtask` and `execute_policy` in the graph; it can be disabled per episode via `AgentConfig(safety_check_enabled=False)`.
+
+### Bounded execution (implemented: `AgentConfig`)
 
 Each episode enforces hard limits to prevent runaway execution:
 
-| Limit | Default | Config key |
+| Limit | Default | Config field |
 |---|---|---|
-| Max retries per subtask | 3 | `safety.max_retries` |
-| Max replan cycles per episode | 2 | `safety.max_replans` |
-| Max action steps per subtask | 200 | `safety.max_steps_per_subtask` |
-| Max total action steps per episode | 1000 | `safety.max_steps_per_episode` |
-| Timeout per subtask (seconds) | 60 | `safety.timeout_subtask_s` |
-| Timeout per episode (seconds) | 300 | `safety.timeout_episode_s` |
+| Max retries per subtask | 2 | `AgentConfig.max_retries` |
+| Max replan cycles per episode | 1 | `AgentConfig.max_replans` |
+| Max action steps per subtask | 200 | `ExecutorConfig.max_steps` |
 
-Exceeding any limit triggers a `SAFETY_LIMIT_EXCEEDED` terminal state.
+Exhausting retries and replans sets `final_status = AgentStatus.FAILED`. Exceeding `max_steps` per subtask returns `ExecutionStatus.MAX_STEPS_EXCEEDED`, which is treated as a subtask failure and flows into the retry/replan logic.
 
-### Action schema and range validation
+### Action schema and range validation (implemented: `Executor`)
 
-All actions produced by `RobotPolicy.act()` are validated against a Pydantic schema before being passed to `RobotEnvironment.step()`. Validation failures trigger `INVALID_ACTION` and halt execution for that step. The executor does not retry invalid actions automatically — a retry must be explicitly authorised by the graph's recovery node.
+All actions produced by `RobotPolicy.act()` are validated against a Pydantic schema (finite float32 values) before being passed to `RobotEnvironment.step()`. Validation failures set `ExecutionStatus.INVALID_ACTION`. The executor does not retry invalid actions automatically — a retry requires the graph's `diagnose_failure` node to authorise it.
 
-### Human approval checkpoints
+### Fail-closed behavior (implemented)
 
-Operations classified as high-risk or ambiguous (e.g., the planner is uncertain, confidence is below threshold, or the task involves an unknown object) require human approval before execution. In mock and replay modes this is simulated by a configurable flag. In a future hardware deployment this must be a real blocking confirmation.
+When any of the following occur, the agent sets a terminal `AgentStatus` and stops:
 
-### Fail-closed behavior
-
-When any of the following occur, the agent transitions to the `FAILED_SAFETY` terminal state and stops:
-
-- Plan validation fails and max replans are exhausted
-- Policy output fails schema validation more than once consecutively
-- Safety gate returns `UNSAFE` for the current subtask
-- Telemetry contains a credential or secret (redacted and logged; execution halted)
+- Goal text is empty → `FAILED`
+- Planner raises `PlanningError` and replans are exhausted → `FAILED`
+- Safety gate rejects the subtask instruction → `SAFETY_STOP`
+- Both retry budget and replan budget are exhausted → `FAILED`
 
 ### Cancellation
 

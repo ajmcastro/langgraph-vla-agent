@@ -60,7 +60,7 @@ class HubDatasetInspector:
             "hub_id": self._hub_id,
             "sha": info.sha,
             "private": info.private,
-            "card_data": info.card_data.to_dict() if info.card_data else {},  # type: ignore[no-untyped-call]
+            "card_data": info.card_data.to_dict() if info.card_data else {},
         }
 
     def fetch_card_text(self) -> str:

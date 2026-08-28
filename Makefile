@@ -9,7 +9,7 @@
 .PHONY: help setup sync setup-datasets setup-agent setup-vla \
         format lint typecheck test test-unit test-integration \
         check inspect-data evaluate-mock evaluate-replay evaluate-policy \
-        evaluate-agent train train-cloud validate-train-config \
+        evaluate-agent evaluate-agent-fine train train-cloud validate-train-config \
         compare-checkpoints compare-checkpoints-vla run-demo clean
 
 PYTHON := uv run python
@@ -102,9 +102,13 @@ evaluate-replay:
 evaluate-policy:
 	$(PYTHON) scripts/evaluate_policy.py --mode vla
 
-## evaluate-agent: [OPTIONAL] Full agent evaluation (requires agent + vla extras)
+## evaluate-agent: Run LangGraph agent in mock mode (requires agent extra: make setup-agent)
 evaluate-agent:
-	@echo "Milestone 5 target — not yet implemented"
+	$(PYTHON) scripts/run_agent.py --granularity coarse
+
+## evaluate-agent-fine: Run LangGraph agent with fine-grained subtask decomposition
+evaluate-agent-fine:
+	$(PYTHON) scripts/run_agent.py --granularity fine
 
 # ---------------------------------------------------------------------------
 # Training (Milestone 4+, Cloud GPU required)

@@ -19,11 +19,13 @@ The LLM/LangGraph layer and the VLA policy layer must remain **strictly separate
 ┌──────────────────────────▼──────────────────────────────────┐
 │  LangGraph Agent  (goal/subtask timescale)                  │
 │                                                             │
-│  understand_goal → validate_goal → create_plan              │
-│  → select_next_subtask → safety_check → execute_policy      │
-│  → observe_result → verify_result                           │
-│      ├─ success → update_plan → (next subtask | complete)   │
-│      └─ failure → diagnose → retry / replan / fail          │
+│  understand_goal → create_plan → select_next_subtask        │
+│  → safety_check → execute_policy → verify_result            │
+│      ├─ success → select_next_subtask (→ END when all done) │
+│      └─ failure → diagnose_failure                          │
+│           ├─ retry_count < max_retries → execute_policy     │
+│           ├─ replan_count < max_replans → create_plan       │
+│           └─ both exhausted → END (FAILED)                  │
 │                                                             │
 │  State: TaskGoal, TaskPlan, SubTask, ExecutionResult,       │
 │         retry_count, replan_count, safety_status            │
@@ -58,21 +60,27 @@ The LLM/LangGraph layer and the VLA policy layer must remain **strictly separate
 
 Graph state stores **orchestration metadata only** — never raw image tensors or full trajectory arrays. Large data is referenced by stable IDs (file paths, artifact IDs).
 
+Implemented in `src/langgraph_vla_agent/agent/state.py` as a `TypedDict`. Fields with `Annotated[list[str], operator.add]` use LangGraph's append reducer — nodes return only new items; LangGraph concatenates.
+
 | Field | Type | Notes |
 |---|---|---|
-| `original_goal` | `str` | Verbatim user input |
-| `world_state_reference` | `str \| None` | Path/ID to current world snapshot |
-| `plan` | `TaskPlan \| None` | Structured subtask plan |
+| `run_id` | `str` | UUID4 correlation ID for the episode |
+| `goal` | `TaskGoal` | Typed goal (text + run_id + evaluation_mode) |
+| `plan` | `TaskPlan \| None` | Structured subtask plan; cleared on replan |
 | `current_subtask` | `SubTask \| None` | Active subtask |
-| `completed_subtasks` | `list[SubTask]` | Successful completions |
-| `failed_subtasks` | `list[SubTask]` | Failed attempts with reasons |
-| `execution_history_references` | `list[str]` | Artifact refs, not raw data |
-| `retry_count` | `int` | Attempts on current subtask |
-| `replan_count` | `int` | Full replanning cycles |
+| `completed_subtask_ids` | `Annotated[list[str], add]` | Appended by `verify_result` on success |
+| `failed_subtask_ids` | `Annotated[list[str], add]` | Appended by `diagnose_failure` on replan |
+| `execution_history_references` | `Annotated[list[str], add]` | Artifact refs, not raw data |
+| `retry_count` | `int` | Attempts on current subtask; reset on success |
+| `replan_count` | `int` | Full replanning cycles this episode |
 | `last_execution_result` | `ExecutionResult \| None` | Most recent executor output |
-| `safety_status` | `SafetyStatus` | Current safety gate result |
+| `safety_status` | `str` | `"ok"` or `"rejected"` |
+| `safety_rejection_reason` | `str` | Set by `safety_check` on rejection |
 | `evaluation_mode` | `EvaluationMode` | mock / replay / simulation / hardware |
-| `final_status` | `FinalStatus \| None` | Terminal state when set |
+| `final_status` | `AgentStatus \| None` | Terminal state when set (COMPLETED / FAILED / SAFETY_STOP) |
+| `error_message` | `str` | Human-readable failure description |
+
+`AgentStatus` values: `RUNNING`, `COMPLETED`, `FAILED`, `SAFETY_STOP`.
 
 **What does NOT belong in graph state:** image tensors, trajectory arrays, model weights, raw sensor streams, telemetry blobs. These live in the executor context, artifact store, or observability system.
 
