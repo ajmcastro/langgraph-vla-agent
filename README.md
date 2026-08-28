@@ -53,7 +53,7 @@ Observation + result → verify → retry / replan / complete
 
 ## Results to date
 
-M4 (fine-tuning infrastructure + training run) is the furthest milestone with measurable results. All numbers are from offline/replay evaluation on synthetic fixture episodes — see [docs/evaluation.md](docs/evaluation.md) for what this means and what it does not prove.
+M6 is the current completed milestone. M4 (fine-tuning) is the furthest milestone with measurable numbers — see [docs/evaluation.md](docs/evaluation.md) for what each result means and what it does not prove.
 
 | Milestone | What ran | Key result |
 |---|---|---|
@@ -62,12 +62,13 @@ M4 (fine-tuning infrastructure + training run) is the furthest milestone with me
 | M3 — SmolVLA baseline | SmolVLA adapter on fixture episodes | Base model produces valid 6-D float32 actions; accuracy not yet meaningful (fixture data only) |
 | M4 — Fine-tuning | 10 k-step MPS training run on `svla_so100_pickplace` | L1 error: 0.1893 → 0.1436 (−24%) vs base; L1 std halved |
 | M5 — LangGraph orchestration | Full StateGraph with DeterministicPlanner + MockRobotPolicy | Graph routing, retry/replan/fail paths, and safety gate verified in mock mode; 249 tests pass |
+| M6 — Granularity experiments | VlaOnlyPlanner + 3-condition experiment infrastructure | Orchestration cost confirmed: vla_only=1 policy call, coarse=2, fine=5; all conditions 100% on mock success scenarios; 270 tests pass |
 
 **M4 caveat:** The −24% L1 improvement is measured on 3 synthetic fixture episodes, not on real held-out episodes from `svla_so100_pickplace`. Lower prediction error on fixtures does not prove closed-loop task success. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.
 
-**M5 note:** All results are in mock evaluation mode. The graph is wired to `MockRobotPolicy` and `MockEnvironment` — no LLM key or GPU needed. Connecting the graph to replay or VLA evaluation is M6 work.
+**M5 note:** All results are in mock evaluation mode. The graph is wired to `MockRobotPolicy` and `MockEnvironment` — no LLM key or GPU needed.
 
-The core research comparison (VLA-only vs coarse agentic vs fine agentic) is Milestone 6 and has not yet run.
+**M6 note:** The 3-condition experiment (vla_only / coarse_agentic / fine_agentic) runs end-to-end through the compiled LangGraph graph. In mock mode all three complete at 100% on success scenarios — the meaningful comparison is orchestration *cost* (policy calls, subtask count), not success rate. Real performance differences require simulation (M7+) or hardware.
 
 ---
 
@@ -136,6 +137,25 @@ For cloud GPU training via HF Jobs, set `hf_jobs_target` in [`configs/training/s
 
 *Evaluated on 3 synthetic fixture episodes. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.*
 
+### Running the planning-granularity experiment (Milestone 6)
+
+```bash
+# Install the [agent] extra (adds LangGraph + langchain-core):
+make setup-agent
+
+# Run the 3-condition experiment (5 success scenarios, ~15 episodes total):
+make run-experiment
+
+# Run with a failure scenario to see retry/replan paths in action:
+make run-experiment-fail
+
+# Custom options:
+uv run python scripts/run_experiment.py --max-retries 3 --max-replans 2
+uv run python scripts/run_experiment.py --fail-scenario --quiet
+```
+
+No LLM key or GPU needed. The output table shows orchestration cost (policy calls, subtask counts) across the three conditions, plus a disclaimer explaining what the mock results do and do not prove.
+
 ### Running the LangGraph agent (Milestone 5)
 
 ```bash
@@ -198,7 +218,7 @@ uv pip install --torch-backend cu128 lerobot
 | 3 | SmolVLA baseline | ✅ Complete |
 | 4 | Cloud GPU fine-tuning | ✅ Complete (trained on MPS, 24% L1 improvement) |
 | 5 | LangGraph orchestration | ✅ Complete (full StateGraph with retry/replan/safety; 249 tests) |
-| 6 | Planning-granularity experiments | Pending |
+| 6 | Planning-granularity experiments | ✅ Complete (VlaOnlyPlanner + 3-condition experiment; 270 tests) |
 | 7 | Optional closed-loop simulation | Pending |
 | 8 | Portfolio hardening | Pending |
 

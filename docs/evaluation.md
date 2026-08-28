@@ -80,46 +80,36 @@ Every result, metric, and claim in this project must identify its evaluation mod
 
 ## Comparison protocol (Milestone 6)
 
-The planning-granularity experiment compares three conditions:
-1. **VLA-only** — the full multi-step instruction is passed directly to the policy; no LangGraph orchestration.
-2. **Coarse agentic** — LangGraph decomposes the goal into 2–4 meaningful manipulation subtasks (e.g. "approach → grasp → lift → place").
-3. **Fine agentic** — LangGraph decomposes into smaller physical skills (e.g. "open gripper → move to pre-grasp → close gripper → …").
+The planning-granularity experiment compares three conditions, all routed through the same compiled LangGraph graph with identical `AgentConfig`, `max_retries`, `max_replans`, and environment settings:
 
-### Planned experimental design
+| Condition | Planner | Subtasks | Policy calls (mock) |
+|---|---|---|---|
+| `vla_only` | `VlaOnlyPlanner` | 1 (full goal as one subtask) | 1 |
+| `coarse_agentic` | `DeterministicPlanner("coarse")` | 2 | 2 |
+| `fine_agentic` | `DeterministicPlanner("fine")` | 5 | 5 |
 
-**Dataset and task:** `lerobot/svla_so100_pickplace` (50 episodes, Apache-2.0). Task: pick a cube from one of 5 positions and place it in a target zone. This is the reference task from the SmolVLA paper, making results directly comparable to the published baseline.
+### M6 implementation (completed)
 
-**Policy checkpoint:** The M4 fine-tuned checkpoint (`smolvla_so100_m4`, step 010000) for all three conditions. The base model (`lerobot/smolvla_base`) is evaluated separately as an additional baseline to isolate the effect of fine-tuning from the effect of orchestration.
+**What runs:** `run_granularity_experiment(scenarios, max_retries, max_replans)` iterates all three conditions over a shared list of `EpisodeScenario` objects. Each (condition, episode) pair builds a fresh `AgentRunner` with `MockRobotPolicy` and `MockEnvironment`. Results are collected as `ConditionResult` per episode and aggregated into `GranularityExperimentResult`.
 
-**Evaluation mode:** Offline/replay. The test split (15% holdout, ~7–8 episodes not seen during training) is the scenario set. Each episode is run under all three conditions against the same recorded observations.
+**Mock evaluation mode:** All M6 results are in mock mode. `MockEnvironment` is deterministic — all three conditions complete at 100% on success scenarios. The informative comparison is orchestration **cost** (policy calls, subtask overhead). Run with `make run-experiment`.
 
-**Success predicate:** Action prediction L1 error below the base model's per-episode mean on the same split. Subtask completion is defined by replay-level episode termination signals.
+**Failure path:** With `MockScenario.FAIL_AT_STEP` and `max_retries=0`, all three conditions reach `AgentStatus.FAILED`. The retry/replan paths are exercised correctly regardless of planning granularity. Run with `make run-experiment-fail`.
 
-**Action budget:** Max 200 steps per episode (matching the longest episode in `svla_so100_pickplace`). Subtask-level budget allocated proportionally by the planner.
+### Requirements for M7 closed-loop comparison
 
-**Sample size:** With ~7–8 test episodes, n < 10 per condition. The small-sample disclaimer applies to all M6 results. Statistical tests (Wilcoxon signed-rank) are included for completeness but effect sizes and direction are the primary evidence.
+The real question — does finer decomposition improve task success? — cannot be answered in mock mode. The M7 protocol must satisfy:
 
-**What would constitute a meaningful result:**
-- VLA-only vs coarse agentic: a consistent L1 reduction (>10%) or improved subtask completion rate across all test episodes would support the orchestration hypothesis.
-- Coarse vs fine agentic: a tradeoff — lower error but more LLM calls and higher latency — would support the granularity hypothesis.
-- No measurable difference would be an honest and publishable null result: it would suggest that SmolVLA's native language understanding is sufficient for this task without decomposition.
+- **Same test split and episode order** across conditions
+- **Same policy checkpoint** (`smolvla_so100_m4`, step 010000, or the base model as an additional baseline)
+- **Same action budget** (max 200 steps, matching the longest episode in `svla_so100_pickplace`)
+- **Same success predicates** and evaluation mode (offline/replay or simulation)
+- **Statistical tests** applied only when n ≥ 10 per condition; small-sample disclaimer included otherwise
 
-### What must be finalized in M5 (before M6 can run)
-
-The LangGraph graph (M5) determines what "a coarse subtask decomposition" and "a fine subtask decomposition" actually mean in code. The subtask vocabulary, plan schema, and orchestration logic are M5 deliverables. M6 cannot be designed beyond the structural level above until M5 exists. Specifically:
-- Exact subtask labels and granularity levels (defined by the planner in M5)
-- How the agent decides a subtask is complete in replay mode (must be replay-compatible — no live camera feedback)
-- Whether the LLM planner is deterministic or sampled (affects reproducibility)
-
-### Consistency requirements (all conditions)
-
-- Same test split and episode order
-- Same policy checkpoint
-- Same action budget
-- Same success predicates
-- Same evaluation mode (offline/replay)
-
-Results are reported with mean ± std and sample size. Statistical tests are applied when n ≥ 10 per condition. The small-sample disclaimer is included when n < 10.
+**What would constitute a meaningful M7 result:**
+- VLA-only vs coarse agentic: a consistent L1 reduction (>10%) or improved subtask completion rate across test episodes supports the orchestration hypothesis.
+- Coarse vs fine agentic: a tradeoff — lower error but more LLM calls and higher latency — supports the granularity hypothesis.
+- No measurable difference would be an honest null result: SmolVLA's native language understanding may be sufficient for this task without decomposition.
 
 ---
 
@@ -268,9 +258,43 @@ Milestone 5 adds the full LangGraph StateGraph: `understand_goal → create_plan
 - That the `DeterministicPlanner`'s subtask vocabulary matches what SmolVLA was trained on. The coarse plan (["approach and grasp", "move and place"]) and fine plan (5 steps) are keyword templates — they are plausible decompositions, not ground-truth instruction labels from `svla_so100_pickplace`. Whether these subtask instructions produce lower action error than the full goal string is the M6 experiment.
 - That the `LLMTaskPlanner` produces better plans than `DeterministicPlanner` for this task. It may — but the evidence requires running M6 with both planners against the same recorded episodes.
 - That retry and replan logic improves task success in closed-loop execution. The mock tests verify the *software behavior* (correct state transitions) but not the *performance impact* (whether a retry actually leads to success on a real task).
-- That the graph executes correctly in replay or VLA mode. M5 integration tests use `MockRobotPolicy` and `MockEnvironment`. Connecting the graph to `ReplayRobotPolicy`/`ReplayEnvironment` is M6 work.
+- That the graph executes correctly in replay or VLA mode. M5 and M6 integration tests both use `MockRobotPolicy` and `MockEnvironment`. Connecting the graph to `ReplayRobotPolicy`/`ReplayEnvironment` is M7 work.
 
 All M5 results are labeled `evaluation_mode=MOCK`.
+
+---
+
+## What mock evaluation proves in M6
+
+Milestone 6 adds `VlaOnlyPlanner`, `run_granularity_experiment()`, and the three-condition planning-granularity comparison infrastructure. All M6 claims are verified in mock mode — no LLM, no GPU, no dataset, no robot.
+
+### What M6 proves
+
+| Claim | How it is tested |
+|---|---|
+| `VlaOnlyPlanner` wraps the full goal as exactly one subtask | `test_vla_only_planner_produces_single_subtask` |
+| `VlaOnlyPlanner.plan()` sets the subtask instruction to the full goal text | `test_vla_only_planner_uses_full_goal_as_instruction` |
+| `VlaOnlyPlanner.planner_id` is `"vla_only"` | `test_vla_only_planner_id_is_vla_only` |
+| `run_granularity_experiment()` returns results for all three conditions | `test_experiment_returns_all_three_conditions` |
+| All three conditions complete at 100% on success scenarios (mock is deterministic) | `test_all_conditions_complete_on_success_scenario` |
+| VLA-only condition produces exactly 1 planned subtask per episode | `test_vla_only_has_one_subtask` |
+| Coarse condition produces exactly 2 planned subtasks per episode | `test_coarse_has_two_subtasks` |
+| Fine condition produces exactly 5 planned subtasks per episode | `test_fine_has_five_subtasks` |
+| Policy calls equal subtasks planned on a clean success (no retries or replans) | `test_policy_calls_equal_subtasks_on_clean_success` |
+| VLA-only has fewer policy calls than coarse, which has fewer than fine | `test_vla_only_has_fewer_policy_calls_than_coarse`, `test_coarse_has_fewer_policy_calls_than_fine` |
+| All conditions fail when mock environment never succeeds (max_retries=0) | `test_all_conditions_fail_when_mock_never_succeeds` |
+| `mean_subtasks_planned` and `mean_policy_calls` are strictly ordered vla < coarse < fine | `test_mean_subtasks_differ_across_conditions`, `test_mean_policy_calls_differ_across_conditions` |
+| `ConditionSummary.completion_rate` is 1.0 on all-success scenarios | `test_condition_summary_completion_rate_is_one_on_success` |
+| `GranularityExperimentResult.summary_lines()` includes a disclaimer note | `test_summary_lines_has_evaluation_note` |
+
+### What M6 does NOT prove
+
+- That any planning condition improves real-world task success. `MockEnvironment` is deterministic — it succeeds whenever `succeed_at_step` is reached, regardless of what the policy predicted. All three conditions complete at 100% on success scenarios because the environment is scripted, not because the planning helps.
+- That coarse or fine decomposition improves action quality. The policy in all M6 runs is `MockRobotPolicy` (returns constant valid zero actions). Connecting the graph to `ReplayRobotPolicy` or `SmolVLAPolicyAdapter` in offline/replay mode is M7 work.
+- That the subtask vocabulary in `DeterministicPlanner` matches SmolVLA's training distribution. Whether the subtask instructions ("approach and grasp", "move and place") produce lower action error than the full goal string requires running the experiment with a real policy checkpoint against real dataset episodes.
+- Statistical significance. The default scenario set has N=5–6 episodes. Results are descriptive statistics only. Statistical tests (Wilcoxon) are appropriate only when N ≥ 10 per condition, which requires simulation (M7+).
+
+All M6 results are labeled `evaluation_mode=MOCK`. The informative comparison in mock mode is orchestration **cost** (policy calls, subtask overhead), not success rate.
 
 ---
 

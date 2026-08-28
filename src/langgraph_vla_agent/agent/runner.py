@@ -24,6 +24,7 @@ from langgraph_vla_agent.environments.mock import MockEnvironment, MockScenario
 from langgraph_vla_agent.execution.config import ExecutorConfig
 from langgraph_vla_agent.execution.executor import Executor
 from langgraph_vla_agent.planning.deterministic import DeterministicPlanner
+from langgraph_vla_agent.planning.vla_only import VlaOnlyPlanner
 from langgraph_vla_agent.policies.mock import MockPolicyBehavior, MockRobotPolicy
 
 _log = structlog.get_logger(__name__)
@@ -104,8 +105,12 @@ def make_mock_runner(
             granularity=Granularity.COARSE,
         )
 
-    granularity_str = "fine" if config.granularity.value == "fine" else "coarse"
-    planner = DeterministicPlanner(granularity=granularity_str)  # type: ignore[arg-type]
+    if config.granularity == Granularity.VLA_ONLY:
+        planner: DeterministicPlanner | VlaOnlyPlanner = VlaOnlyPlanner()
+    elif config.granularity == Granularity.FINE:
+        planner = DeterministicPlanner(granularity="fine")
+    else:
+        planner = DeterministicPlanner(granularity="coarse")
     policy = MockRobotPolicy(behavior=MockPolicyBehavior.ALWAYS_VALID)
     environment = MockEnvironment(scenario=scenario, n=succeed_at_step)
     executor_config = ExecutorConfig(

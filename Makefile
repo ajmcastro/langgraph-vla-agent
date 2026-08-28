@@ -9,7 +9,8 @@
 .PHONY: help setup sync setup-datasets setup-agent setup-vla \
         format lint typecheck test test-unit test-integration \
         check inspect-data evaluate-mock evaluate-replay evaluate-policy \
-        evaluate-agent evaluate-agent-fine train train-cloud validate-train-config \
+        evaluate-agent evaluate-agent-fine run-experiment run-experiment-fail \
+        train train-cloud validate-train-config \
         compare-checkpoints compare-checkpoints-vla run-demo clean
 
 PYTHON := uv run python
@@ -109,6 +110,14 @@ evaluate-agent:
 ## evaluate-agent-fine: Run LangGraph agent with fine-grained subtask decomposition
 evaluate-agent-fine:
 	$(PYTHON) scripts/run_agent.py --granularity fine
+
+## run-experiment: Run M6 planning-granularity experiment (requires agent extra: make setup-agent)
+run-experiment:
+	$(PYTHON) scripts/run_experiment.py
+
+## run-experiment-fail: Run M6 experiment with a failure scenario to see retry/replan
+run-experiment-fail:
+	$(PYTHON) scripts/run_experiment.py --fail-scenario
 
 # ---------------------------------------------------------------------------
 # Training (Milestone 4+, Cloud GPU required)

@@ -263,6 +263,39 @@ These three fixes were driven by actual runtime errors against the installed pac
 
 ---
 
-## Milestone 6 — (Pending)
+## Milestone 6 — Planning-granularity experiments
+
+### VlaOnlyPlanner as a structurally-compatible baseline
+
+**Decision:** `VlaOnlyPlanner` wraps the full goal text into a single `SubTask` and satisfies the `TaskPlanner` Protocol structurally. It lives in `planning/vla_only.py` alongside `DeterministicPlanner`.
+
+**Why:** The M6 research question requires a VLA-only condition that routes through the same `AgentRunner`/LangGraph infrastructure as the agentic conditions. If VLA-only bypassed the graph entirely, its metrics (policy calls, retry counts, replan counts) would be incomparable. By using a planner that produces exactly one subtask, all three conditions — `vla_only`, `coarse_agentic`, `fine_agentic` — go through identical graph paths and produce the same metric shapes. The only variable is planning granularity.
+
+### Controlled A/B/C experiment design
+
+**Decision:** `run_granularity_experiment()` iterates over all three `(Granularity, condition_name)` pairs, building a fresh `AgentRunner` per (condition, episode) pair with identical `AgentConfig`, `max_retries`, `max_replans`, and `MockEnvironment` settings. Only the planner changes.
+
+**Why:** The point of the experiment is to isolate the effect of planning granularity. All other factors — goal text, policy, environment scenario, action budget, retry budget — must be identical across conditions. Building a fresh runner per episode prevents shared state from contaminating cross-condition comparisons. The `_CONDITIONS` list is module-level and ordered, so every call to `run_granularity_experiment` runs conditions in the same sequence, making results reproducible across repeated runs.
+
+### Deferred import of `make_mock_runner` inside `run_granularity_experiment`
+
+**Decision:** `experiment.py` imports `make_mock_runner` inside the function body (`from langgraph_vla_agent.agent.runner import make_mock_runner`) rather than at the top of the module.
+
+**Why:** `agent/runner.py` imports from `langgraph.graph` (transitively via `agent/graph.py`). If `experiment.py` imported `runner` at module level, it would require the `[agent]` extra even for unit tests that only instantiate `EpisodeScenario`, `ConditionResult`, and `VlaOnlyPlanner`. Deferring the import to the call site keeps `experiment.py` importable without the extra, so the 22 unit tests in `tests/unit/evaluation/test_experiment.py` run under `make check` (the core dev gate). The 16 integration tests in `tests/integration/evaluation/` use `pytest.importorskip("langgraph")` and skip cleanly when absent. This mirrors the M5 pattern already established in `graph.py` for the overall agent import boundary.
+
+### Honest null result by design
+
+**Decision:** The experiment's `evaluation_note` field states that in mock mode all three conditions complete at 100% on success scenarios. `summary_lines()` appends this note to every printed table.
+
+**Why:** `MockEnvironment` is deterministic — it succeeds whenever `succeed_at_step` is reached, regardless of what the policy predicted. Any claim that one planning condition performs better than another on a mock environment would be false. The informative comparison in mock mode is orchestration *cost* (policy calls, subtask overhead), not success rate. Being explicit about this in the output text prevents the experiment from being misread as evidence of real-world performance. Real performance differences require simulation (M7) or hardware.
+
+### Small-sample disclaimer on aggregates
+
+**Decision:** `ConditionSummary` reports `completion_rate`, `mean_subtasks_planned`, `mean_policy_calls`, `mean_retries`, and `mean_replans` as floats without statistical tests.
+
+**Why:** The default scenario set in `run_experiment.py` has N=5 success scenarios — far too small for hypothesis tests. Reporting means without significance framing correctly conveys that these are descriptive statistics, not inferential claims. The evaluation note on every summary table restates this. Statistical tests (Wilcoxon) will be appropriate in M7 if the simulation set reaches N ≥ 10 per condition.
+
+---
+
 ## Milestone 7 — (Pending)
 ## Milestone 8 — (Pending)
