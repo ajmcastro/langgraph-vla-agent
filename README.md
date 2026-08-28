@@ -1,6 +1,6 @@
 # LangGraph VLA Agent
 
-[![CI](https://github.com/acastro-masdima/langgraph-vla-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/acastro-masdima/langgraph-vla-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/ajmcastro/langgraph-vla-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/ajmcastro/langgraph-vla-agent/actions/workflows/ci.yml)
 
 A reference implementation — designed to be studied — showing how an **agentic planning layer** (LangGraph + LLM) can orchestrate a **Vision-Language-Action (VLA) sensorimotor policy** (SmolVLA via Hugging Face LeRobot) for multi-step robot manipulation tasks. It follows production engineering practices throughout: typed domain models, Protocol-based dependency injection, layered evaluation modes, structured experiment logs, and GitHub Actions CI.
 
