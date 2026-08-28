@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/acastro-masdima/langgraph-vla-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/acastro-masdima/langgraph-vla-agent/actions/workflows/ci.yml)
 
-An educational, production-quality open-source project demonstrating how an **agentic planning layer** (LangGraph + LLM) can orchestrate a **Vision-Language-Action (VLA) sensorimotor policy** (SmolVLA via Hugging Face LeRobot) for multi-step robot manipulation tasks.
+A reference implementation — designed to be studied — showing how an **agentic planning layer** (LangGraph + LLM) can orchestrate a **Vision-Language-Action (VLA) sensorimotor policy** (SmolVLA via Hugging Face LeRobot) for multi-step robot manipulation tasks. It follows production engineering practices throughout: typed domain models, Protocol-based dependency injection, layered evaluation modes, structured experiment logs, and GitHub Actions CI.
 
 **Key components:**
 - [**LeRobot**](https://github.com/huggingface/lerobot) — HuggingFace's open-source robotics library providing datasets, training pipelines, and pre-trained robot policies.
@@ -10,6 +10,26 @@ An educational, production-quality open-source project demonstrating how an **ag
 - [**LangGraph**](https://github.com/langchain-ai/langgraph) — A framework for building stateful, multi-step LLM agent graphs. Used here to decompose goals into subtasks and orchestrate policy execution.
 
 > **No physical robot required.** The primary execution path uses public LeRobot-compatible datasets, offline/replay evaluation, and deterministic mocks. Hardware integration is optional future work behind isolated adapters.
+
+---
+
+## Who is this for
+
+This project is useful if you are:
+
+- An **ML or robotics engineer** exploring how to add an agentic planning layer on top of a pre-trained VLA policy — and how to evaluate it honestly without a physical robot.
+- A **LangGraph practitioner** looking for a non-trivial, real-world-shaped StateGraph with retry/replan/safety paths, typed state, and dependency-injected policies.
+- A **software engineer entering the robotics/AI space** who wants a codebase that demonstrates how to structure evaluation, tests, and abstractions so they work without GPU or hardware.
+- A **student or researcher** who wants to study the architecture decisions behind separating planning (goal/subtask timescale) from policy execution (observation/action timescale).
+
+**What you will learn from studying this code:**
+
+- How to design a LangGraph agent with retry, replanning, safety-stop, and typed state — without a single `dict` boundary.
+- How to use `typing.Protocol` and dependency injection so every behaviour is unit-testable without mocking frameworks, GPUs, or robots.
+- How to layer evaluation modes (mock → offline/replay → simulation) so `make check` completes in under a second, but closed-loop differentiation is still provable.
+- How to build honest evaluation infrastructure: structural disclaimers (`evaluation_note` as a Pydantic field), experiment logs with "what this does NOT prove" sections, and evaluation mode labels on every metric.
+- How to fine-tune a VLA model with LeRobot on Apple Silicon (MPS) or cloud GPU and compare checkpoints systematically.
+- How to structure a milestone-driven open-source AI project so each increment is testable, documented, and buildable on without breaking earlier layers.
 
 ---
 
@@ -26,6 +46,8 @@ The project evaluates potential gains in success rate, failure recovery, languag
 | **Fine agentic** | LangGraph decomposes into smaller physical skills (no actuator-level commands) |
 
 All evaluation is performed in mock, offline/replay, or simulation mode. Claims are labelled by their evaluation mode and are never extrapolated to physical-robot performance without explicit hardware experiments.
+
+**Finding so far (M8):** In toy closed-loop simulation (M7), finer decomposition produces differentiated outcomes that mock evaluation cannot: vla_only fails when the per-subtask budget is binding, while coarse and fine conditions succeed. In mock mode (M6), all three conditions complete at 100% — the informative comparison is orchestration *cost* (policy calls: 1 vs 2 vs 5), not success rate. Connecting these results to a real physics simulator or a real policy checkpoint is the next research step.
 
 ---
 
@@ -115,6 +137,24 @@ make test-unit        # fast, no external deps
 make test             # all non-hardware tests
 ```
 
+### Quickest way to see everything working (Milestone 8)
+
+The portfolio demo exercises all three evaluation modes back-to-back with no GPU, no LLM key, and no external simulator:
+
+```bash
+make setup-agent      # adds LangGraph (needed for mock agent + simulation modes)
+make run-demo         # replay → mock agent → simulation
+```
+
+Expected output: three summary dicts, one per mode, each with an `evaluation_note` stating what the result proves. Run time: under 5 seconds.
+
+```bash
+# Run a specific mode:
+uv run python scripts/run_demo.py --mode replay
+uv run python scripts/run_demo.py --mode mock
+uv run python scripts/run_demo.py --mode simulation
+```
+
 ### Fine-tuning SmolVLA (Milestone 4)
 
 ```bash
@@ -161,24 +201,6 @@ uv run python scripts/run_simulation.py --hard --noise 0.05 --quiet
 ```
 
 No external simulator, GPU, or dataset needed. The output table shows per-condition completion rates and per-subtask thresholds, plus an explanation of what the result proves and what it does not.
-
-### Running the portfolio demo (Milestone 8)
-
-```bash
-# Install the [agent] extra (adds LangGraph + langchain-core):
-make setup-agent
-
-# Run all three demo modes (replay → mock agent → simulation):
-make run-demo
-
-# Or run a specific mode:
-uv run python scripts/run_demo.py --mode replay
-uv run python scripts/run_demo.py --mode mock
-uv run python scripts/run_demo.py --mode simulation
-uv run python scripts/run_demo.py --quiet   # suppress per-step output
-```
-
-No LLM key, GPU, or external simulator needed. The demo covers all three evaluation modes in sequence: offline replay (fixture episodes), mock LangGraph agent (pick-and-place), and closed-loop simulation (hard scenario where vla_only fails). Each mode prints a summary dict and an `evaluation_note` that states what the result does and does not prove. The full experiment log is in [`docs/experiments.md`](docs/experiments.md).
 
 ### Running the planning-granularity experiment (Milestone 6)
 
@@ -273,8 +295,10 @@ See [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) for the full specification an
 
 | File | Contents |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | System architecture and layer boundaries |
+| [`docs/architecture.md`](docs/architecture.md) | System architecture, layer boundaries, and key design decisions for interviews |
 | [`docs/evaluation.md`](docs/evaluation.md) | Evaluation modes, metrics, and honesty constraints |
+| [`docs/experiments.md`](docs/experiments.md) | Structured experiment log: conditions, results, proves/does-not-prove, reproduce commands |
+| [`docs/RATIONALE_PER_MILESTONE.md`](docs/RATIONALE_PER_MILESTONE.md) | Design rationale for every milestone decision |
 | [`docs/data.md`](docs/data.md) | Dataset strategy, candidates, provenance |
 | [`docs/safety.md`](docs/safety.md) | Safety design (software guards and future hardware concerns) |
 | [`docs/decisions/`](docs/decisions/) | Architecture Decision Records (ADRs) |
