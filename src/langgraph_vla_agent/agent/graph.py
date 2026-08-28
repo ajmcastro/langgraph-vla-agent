@@ -96,7 +96,7 @@ def build_agent_graph(
         return diagnose_failure(state, config=config)
 
     # --- Build graph. ---
-    graph: StateGraph = StateGraph(AgentState)  # type: ignore[type-arg]
+    graph: StateGraph = StateGraph(AgentState)
 
     graph.add_node("understand_goal", understand_goal)
     graph.add_node("create_plan", _create_plan)
