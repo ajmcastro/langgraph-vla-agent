@@ -53,7 +53,7 @@ Observation + result → verify → retry / replan / complete
 
 ## Results to date
 
-M6 is the current completed milestone. M4 (fine-tuning) is the furthest milestone with measurable numbers — see [docs/evaluation.md](docs/evaluation.md) for what each result means and what it does not prove.
+M7 is the current completed milestone. M4 (fine-tuning) is the furthest milestone with measurable numbers — see [docs/evaluation.md](docs/evaluation.md) for what each result means and what it does not prove.
 
 | Milestone | What ran | Key result |
 |---|---|---|
@@ -63,12 +63,15 @@ M6 is the current completed milestone. M4 (fine-tuning) is the furthest mileston
 | M4 — Fine-tuning | 10 k-step MPS training run on `svla_so100_pickplace` | L1 error: 0.1893 → 0.1436 (−24%) vs base; L1 std halved |
 | M5 — LangGraph orchestration | Full StateGraph with DeterministicPlanner + MockRobotPolicy | Graph routing, retry/replan/fail paths, and safety gate verified in mock mode; 249 tests pass |
 | M6 — Granularity experiments | VlaOnlyPlanner + 3-condition experiment infrastructure | Orchestration cost confirmed: vla_only=1 policy call, coarse=2, fine=5; all conditions 100% on mock success scenarios; 270 tests pass |
+| M7 — Closed-loop simulation | SimulationEnvironment + 3-condition simulation experiment | Hard scenario: vla_only FAILS (threshold unreachable in budget), coarse/fine SUCCEED; first result mock mode cannot produce; 293 tests pass |
 
 **M4 caveat:** The −24% L1 improvement is measured on 3 synthetic fixture episodes, not on real held-out episodes from `svla_so100_pickplace`. Lower prediction error on fixtures does not prove closed-loop task success. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.
 
 **M5 note:** All results are in mock evaluation mode. The graph is wired to `MockRobotPolicy` and `MockEnvironment` — no LLM key or GPU needed.
 
-**M6 note:** The 3-condition experiment (vla_only / coarse_agentic / fine_agentic) runs end-to-end through the compiled LangGraph graph. In mock mode all three complete at 100% on success scenarios — the meaningful comparison is orchestration *cost* (policy calls, subtask count), not success rate. Real performance differences require simulation (M7+) or hardware.
+**M6 note:** The 3-condition experiment (vla_only / coarse_agentic / fine_agentic) runs end-to-end through the compiled LangGraph graph. In mock mode all three complete at 100% on success scenarios — the meaningful comparison is orchestration *cost* (policy calls, subtask count), not success rate. Real performance differences require simulation or hardware — M7 provides toy closed-loop evidence (scalar progress model, no physics), but connecting to a real physics simulator or real policy checkpoint is future work.
+
+**M7 note:** `SimulationEnvironment` is a toy scalar progress model — no external simulator, GPU, or dataset. Actions affect world state: full-positive actions produce full-speed progress, zero actions produce half-speed. In the hard scenario (total_progress=0.5, max_steps=5), vla_only needs 7 steps to reach its threshold but only has a budget of 5 → FAILED. Coarse (threshold=0.25, needs 4 steps) and fine (threshold=0.10, needs 2 steps) succeed. This differentiation cannot be produced in mock mode. `SimulationEnvironment` is not a physics simulator; see [docs/evaluation.md](docs/evaluation.md) for what M7 does and does not prove.
 
 ---
 
@@ -136,6 +139,25 @@ For cloud GPU training via HF Jobs, set `hf_jobs_target` in [`configs/training/s
 | Wall-clock | — | — | 2 h 23 min / 10 k steps |
 
 *Evaluated on 3 synthetic fixture episodes. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.*
+
+### Running the simulation experiment (Milestone 7)
+
+```bash
+# Install the [agent] extra (adds LangGraph + langchain-core):
+make setup-agent
+
+# Easy mode — all three conditions succeed (mirrors mock mode):
+make run-simulation
+
+# Hard mode — vla_only FAILS, coarse/fine SUCCEED (closed-loop differentiation):
+make run-simulation-hard
+
+# Custom parameters:
+uv run python scripts/run_simulation.py --progress 0.4 --steps 6
+uv run python scripts/run_simulation.py --hard --noise 0.05 --quiet
+```
+
+No external simulator, GPU, or dataset needed. The output table shows per-condition completion rates and per-subtask thresholds, plus an explanation of what the result proves and what it does not.
 
 ### Running the planning-granularity experiment (Milestone 6)
 
@@ -219,7 +241,7 @@ uv pip install --torch-backend cu128 lerobot
 | 4 | Cloud GPU fine-tuning | ✅ Complete (trained on MPS, 24% L1 improvement) |
 | 5 | LangGraph orchestration | ✅ Complete (full StateGraph with retry/replan/safety; 249 tests) |
 | 6 | Planning-granularity experiments | ✅ Complete (VlaOnlyPlanner + 3-condition experiment; 270 tests) |
-| 7 | Optional closed-loop simulation | Pending |
+| 7 | Optional closed-loop simulation | ✅ Complete (SimulationEnvironment + hard-scenario differentiation; 293 tests) |
 | 8 | Portfolio hardening | Pending |
 
 See [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) for the full specification and [`docs/RATIONALE_PER_MILESTONE.md`](docs/RATIONALE_PER_MILESTONE.md) for design rationale.

@@ -21,6 +21,7 @@ from langgraph_vla_agent.agent.state import AgentState, make_initial_state
 from langgraph_vla_agent.domain.context import EvaluationMode
 from langgraph_vla_agent.domain.tasks import TaskGoal
 from langgraph_vla_agent.environments.mock import MockEnvironment, MockScenario
+from langgraph_vla_agent.environments.simulation import SimulationEnvironment, SimulationScenario
 from langgraph_vla_agent.execution.config import ExecutorConfig
 from langgraph_vla_agent.execution.executor import Executor
 from langgraph_vla_agent.planning.deterministic import DeterministicPlanner
@@ -115,6 +116,66 @@ def make_mock_runner(
     environment = MockEnvironment(scenario=scenario, n=succeed_at_step)
     executor_config = ExecutorConfig(
         max_steps=50,
+        evaluation_mode=config.evaluation_mode,
+    )
+    executor = Executor(policy, environment, executor_config)
+
+    graph = cast(
+        _Graph,
+        build_agent_graph(executor=executor, planner=planner, config=config),
+    )
+    return AgentRunner(graph=graph, config=config)
+
+
+def make_simulation_runner(
+    config: AgentConfig | None = None,
+    scenario: SimulationScenario | None = None,
+    n_subtasks: int = 1,
+) -> AgentRunner:
+    """Factory for a fully wired simulation runner — no LLM, no GPU, no robot.
+
+    Uses DeterministicPlanner/VlaOnlyPlanner + MockRobotPolicy +
+    SimulationEnvironment.  The SimulationEnvironment is closed-loop: the
+    policy's actions affect progress and the success predicate.
+
+    Parameters
+    ----------
+    config:
+        Agent configuration; defaults to simulation mode with coarse granularity.
+    scenario:
+        SimulationScenario parameters; defaults to SimulationScenario().
+    n_subtasks:
+        Number of subtasks this condition produces.  Used to compute
+        per_subtask_threshold = scenario.total_progress / n_subtasks so
+        that total task difficulty is constant across conditions.
+    """
+    if config is None:
+        config = AgentConfig(
+            evaluation_mode=EvaluationMode.SIMULATION,
+            granularity=Granularity.COARSE,
+        )
+    if scenario is None:
+        scenario = SimulationScenario()
+
+    per_subtask_threshold = scenario.total_progress / max(n_subtasks, 1)
+
+    if config.granularity == Granularity.VLA_ONLY:
+        planner: DeterministicPlanner | VlaOnlyPlanner = VlaOnlyPlanner()
+    elif config.granularity == Granularity.FINE:
+        planner = DeterministicPlanner(granularity="fine")
+    else:
+        planner = DeterministicPlanner(granularity="coarse")
+
+    policy = MockRobotPolicy(behavior=MockPolicyBehavior.ALWAYS_VALID)
+    environment = SimulationEnvironment(
+        success_threshold=per_subtask_threshold,
+        progress_per_step=scenario.progress_per_step,
+        noise_scale=scenario.noise_scale,
+        seed=scenario.seed,
+        state_dim=scenario.state_dim,
+    )
+    executor_config = ExecutorConfig(
+        max_steps=scenario.max_steps_per_subtask,
         evaluation_mode=config.evaluation_mode,
     )
     executor = Executor(policy, environment, executor_config)

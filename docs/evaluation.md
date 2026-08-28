@@ -38,13 +38,13 @@ Every result, metric, and claim in this project must identify its evaluation mod
 
 ### Simulation evaluation
 
-**What it is:** Closed-loop execution in a physics simulator (e.g., MuJoCo via `gym-pusht` or `gym-aloha`). The agent takes real actions and observes simulated consequences.
+**What it is:** Closed-loop execution in a simulator. The agent takes real actions and observes simulated consequences. The simulator may be a toy scalar model (M7: `SimulationEnvironment`) or a full physics engine (e.g., MuJoCo via `gym-pusht` or `gym-aloha`).
 
-**What it can measure:** Closed-loop task success rate, recovery behavior under perturbation, and multi-step planning effectiveness in a controlled world.
+**What it can measure:** Closed-loop task success rate and multi-step planning effectiveness in a controlled world. A physics-based simulator can additionally measure recovery behavior under perturbation. A toy model can demonstrate that actions affect outcomes (differentiation impossible in mock mode) without physical realism.
 
-**Required disclosure:** Report the simulator name and version, task definitions, episode seeds, success predicates, and the known gap between the simulated and real task. Do not claim sim-to-real transfer without separate hardware experiments.
+**Required disclosure:** Report the simulator name/type, task definitions, episode seeds, success predicates, and the known gap between the simulated and real task. For toy models, state explicitly that no physical phenomenon is modelled. Do not claim sim-to-real transfer without separate hardware experiments.
 
-**When to use:** Only if a simulator adds credible closed-loop evidence that offline evaluation cannot provide and the additional complexity is justified by the research question. This is Milestone 7 and explicitly optional.
+**When to use:** When closed-loop differentiation (actions affecting outcomes) is needed and offline/mock evaluation cannot answer the research question. M7 uses `SimulationEnvironment` (a toy scalar progress model) to show that per-subtask budget constraints produce different outcomes across planning conditions.
 
 ---
 
@@ -96,20 +96,25 @@ The planning-granularity experiment compares three conditions, all routed throug
 
 **Failure path:** With `MockScenario.FAIL_AT_STEP` and `max_retries=0`, all three conditions reach `AgentStatus.FAILED`. The retry/replan paths are exercised correctly regardless of planning granularity. Run with `make run-experiment-fail`.
 
-### Requirements for M7 closed-loop comparison
+### M7 implementation (completed)
 
-The real question — does finer decomposition improve task success? — cannot be answered in mock mode. The M7 protocol must satisfy:
+**What runs:** `run_simulation_experiment(scenarios, max_retries, max_replans)` iterates all three conditions over a shared list of `SimulationEpisodeScenario` objects. Each (condition, episode) pair builds a fresh `AgentRunner` with `MockRobotPolicy` and `SimulationEnvironment`. Results are collected as `SimulationConditionResult` per episode and aggregated into `SimulationExperimentResult`.
 
-- **Same test split and episode order** across conditions
-- **Same policy checkpoint** (`smolvla_so100_m4`, step 010000, or the base model as an additional baseline)
-- **Same action budget** (max 200 steps, matching the longest episode in `svla_so100_pickplace`)
-- **Same success predicates** and evaluation mode (offline/replay or simulation)
-- **Statistical tests** applied only when n ≥ 10 per condition; small-sample disclaimer included otherwise
+**Closed-loop semantics:** `SimulationEnvironment` is a scalar progress model. Each `step(action)` advances world state: `action_contribution = (clip(mean(action.values), -1, 1) + 1) / 2 ∈ [0, 1]`; `delta = progress_per_step × action_contribution + noise`; `progress = clip(progress + delta, 0, 1)`. The subtask succeeds when `progress ≥ success_threshold`. Actions are not ignored — they determine how fast progress is made.
 
-**What would constitute a meaningful M7 result:**
-- VLA-only vs coarse agentic: a consistent L1 reduction (>10%) or improved subtask completion rate across test episodes supports the orchestration hypothesis.
-- Coarse vs fine agentic: a tradeoff — lower error but more LLM calls and higher latency — supports the granularity hypothesis.
-- No measurable difference would be an honest null result: SmolVLA's native language understanding may be sufficient for this task without decomposition.
+**Per-subtask threshold scaling:** The total required progress is constant across conditions. Each condition's `success_threshold = total_progress / n_subtasks`, so the task is neither easier nor harder — it is split into smaller, individually achievable chunks.
+
+**Key result — hard scenario (total_progress=0.5, max_steps=5, MockRobotPolicy):**
+
+| Condition | Subtasks | Per-subtask threshold | Steps needed | Budget | Result |
+|---|---|---|---|---|---|
+| `vla_only` | 1 | 0.50 | ≈7 | 5 | **FAILED** |
+| `coarse_agentic` | 2 | 0.25 | ≈4 | 5 | COMPLETED |
+| `fine_agentic` | 5 | 0.10 | ≈2 | 5 | COMPLETED |
+
+This is the result mock mode cannot produce — in mock mode all conditions always succeed on success scenarios regardless of action content. In simulation, the per-subtask budget constraint is binding.
+
+**Simulation evaluation mode:** All M7 results are labeled `evaluation_mode=SIMULATION` and carry `SimulationExperimentResult.evaluation_note` stating that the simulator is a toy scalar model (no MuJoCo, no rigid-body dynamics, no rendering). Run with `make run-simulation` (easy) or `make run-simulation-hard` (constrained).
 
 ---
 
@@ -218,7 +223,7 @@ Full provenance: `data/provenance/training/smolvla_so100_m4.yaml`.
 **What M4 still does NOT prove:**
 
 - That the 24% L1 improvement holds on real held-out episodes from `svla_so100_pickplace` (fixture episodes are synthetic — evaluating on real test-split episodes requires downloading the full dataset and building a `HubEpisodeStore` or similar).
-- That lower L1/L2 error translates to higher task success (requires simulation or hardware — M7+).
+- That lower L1/L2 error translates to higher task success. M7's toy simulation demonstrates that actions affect outcomes, but uses `MockRobotPolicy` (constant zeros) — not a real VLA policy. A physics-based simulator (MuJoCo) or hardware experiment is needed to connect error reduction to real task success.
 - That the training config is optimal (10 k steps on MPS is a reasonable baseline, not a tuned recipe; a cloud CUDA run at full batch size may produce different results).
 
 All comparison results are labeled `evaluation_mode=REPLAY` and carry `CheckpointComparisonResult.evaluation_note`.
@@ -258,7 +263,7 @@ Milestone 5 adds the full LangGraph StateGraph: `understand_goal → create_plan
 - That the `DeterministicPlanner`'s subtask vocabulary matches what SmolVLA was trained on. The coarse plan (["approach and grasp", "move and place"]) and fine plan (5 steps) are keyword templates — they are plausible decompositions, not ground-truth instruction labels from `svla_so100_pickplace`. Whether these subtask instructions produce lower action error than the full goal string is the M6 experiment.
 - That the `LLMTaskPlanner` produces better plans than `DeterministicPlanner` for this task. It may — but the evidence requires running M6 with both planners against the same recorded episodes.
 - That retry and replan logic improves task success in closed-loop execution. The mock tests verify the *software behavior* (correct state transitions) but not the *performance impact* (whether a retry actually leads to success on a real task).
-- That the graph executes correctly in replay or VLA mode. M5 and M6 integration tests both use `MockRobotPolicy` and `MockEnvironment`. Connecting the graph to `ReplayRobotPolicy`/`ReplayEnvironment` is M7 work.
+- That the graph executes correctly in replay or VLA mode. M5 and M6 integration tests both use `MockRobotPolicy` and `MockEnvironment`. Connecting the graph to `SimulationEnvironment` (closed-loop toy physics) is M7 work; connecting to `ReplayEnvironment` with a real policy checkpoint is future work.
 
 All M5 results are labeled `evaluation_mode=MOCK`.
 
@@ -290,11 +295,49 @@ Milestone 6 adds `VlaOnlyPlanner`, `run_granularity_experiment()`, and the three
 ### What M6 does NOT prove
 
 - That any planning condition improves real-world task success. `MockEnvironment` is deterministic — it succeeds whenever `succeed_at_step` is reached, regardless of what the policy predicted. All three conditions complete at 100% on success scenarios because the environment is scripted, not because the planning helps.
-- That coarse or fine decomposition improves action quality. The policy in all M6 runs is `MockRobotPolicy` (returns constant valid zero actions). Connecting the graph to `ReplayRobotPolicy` or `SmolVLAPolicyAdapter` in offline/replay mode is M7 work.
+- That coarse or fine decomposition improves action quality. The policy in all M6 runs is `MockRobotPolicy` (returns constant valid zero actions). M7 connects the graph to `SimulationEnvironment` (closed-loop toy physics) to show that actions matter; connecting to `ReplayRobotPolicy` or `SmolVLAPolicyAdapter` against real dataset episodes is future work.
 - That the subtask vocabulary in `DeterministicPlanner` matches SmolVLA's training distribution. Whether the subtask instructions ("approach and grasp", "move and place") produce lower action error than the full goal string requires running the experiment with a real policy checkpoint against real dataset episodes.
-- Statistical significance. The default scenario set has N=5–6 episodes. Results are descriptive statistics only. Statistical tests (Wilcoxon) are appropriate only when N ≥ 10 per condition, which requires simulation (M7+).
+- Statistical significance. The default scenario set has N=5–6 episodes. Results are descriptive statistics only. Statistical tests (Wilcoxon) are appropriate only when N ≥ 10 per condition; M7's simulation experiment uses N=3, also below that threshold.
 
 All M6 results are labeled `evaluation_mode=MOCK`. The informative comparison in mock mode is orchestration **cost** (policy calls, subtask overhead), not success rate.
+
+---
+
+## What simulation evaluation proves in M7
+
+Milestone 7 adds `SimulationEnvironment`, `SimulationScenario`, and `run_simulation_experiment()`. The environment is a toy scalar progress model — no external simulator, GPU, or dataset required. All M7 claims are verified with `MockRobotPolicy` and the built-in `SimulationEnvironment`.
+
+### What M7 proves
+
+| Claim | How it is tested |
+|---|---|
+| `SimulationEnvironment` satisfies the `RobotEnvironment` Protocol | `test_simulation_environment_satisfies_protocol` |
+| Zero actions produce half-speed progress (action_contribution = 0.5) | `test_zero_action_makes_half_speed_progress` |
+| Full-positive actions produce full-speed progress (contribution = 1.0) | `test_positive_action_makes_full_speed_progress` |
+| Full-negative actions produce zero progress (contribution = 0.0) | `test_negative_action_makes_zero_speed_progress` |
+| Progress accumulates correctly across steps | `test_progress_accumulates_across_steps` |
+| Progress is clipped at 0.0 and 1.0 | `test_progress_clipped_at_one`, `test_progress_clipped_at_zero_with_noise` |
+| Subtask terminates with `success=True` when progress ≥ threshold | `test_step_terminated_at_threshold` |
+| Hard scenario: vla_only needs 7 steps but has budget=5 → FAILS | `test_success_requires_reaching_threshold`, `test_vla_only_fails_on_hard_scenario` |
+| Hard scenario: coarse threshold=0.25 is reachable in 5 steps → COMPLETED | `test_coarse_succeeds_on_hard_scenario` |
+| Hard scenario: fine threshold=0.10 is reachable in 5 steps → COMPLETED | `test_fine_succeeds_on_hard_scenario` |
+| Completion rate is strictly lower for vla_only than agentic conditions | `test_hard_completion_rate_differs_across_conditions` |
+| Per-subtask threshold is ordered: vla > coarse > fine | `test_per_subtask_threshold_scales_with_n_subtasks` |
+| Total required progress is identical across all three conditions | `test_total_progress_consistent_across_conditions` |
+| Easy scenario: all three conditions complete at 100% | `test_all_conditions_complete_on_easy_scenario` |
+| `reset()` is reproducible — same subtask yields the same trajectory | `test_two_resets_give_identical_first_step` |
+| `observe()` is side-effect-free — does not advance step count | `test_observe_does_not_advance_step_count` |
+| `SimulationScenario` rejects invalid parameters (non-positive progress, etc.) | `test_simulation_scenario_rejects_zero_total_progress` |
+
+### What M7 does NOT prove
+
+- Real robot performance. `SimulationEnvironment` is a single scalar `[0, 1]` progress variable — there are no joint positions, no rigid-body dynamics, no camera rendering, no physical contact, and no sim-to-real gap characterisation.
+- That `MockRobotPolicy` (constant zero actions) is representative of SmolVLA or any real VLA policy. All M7 differentiation comes from the per-subtask success threshold, not from policy quality. The M7 experiment would look identical regardless of what `MockRobotPolicy` returns, as long as the returns are deterministic.
+- That finer decomposition improves real task success in a real or validated simulator. Connecting `SimulationEnvironment` to MuJoCo (e.g. `gym-pusht`, `gym-aloha`) or replacing it with a real physics sim is explicitly out of scope for M7 and is future work.
+- Statistical significance. N=3 episodes per condition is far below the N ≥ 10 threshold for hypothesis tests (Wilcoxon). Results in the script are descriptive only.
+- Sim-to-real transfer. The toy physics model does not model any physical phenomenon present in the SO-100 hardware task.
+
+All M7 results are labeled `evaluation_mode=SIMULATION` and carry `SimulationExperimentResult.evaluation_note`.
 
 ---
 

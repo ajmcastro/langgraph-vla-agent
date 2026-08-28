@@ -10,6 +10,7 @@
         format lint typecheck test test-unit test-integration \
         check inspect-data evaluate-mock evaluate-replay evaluate-policy \
         evaluate-agent evaluate-agent-fine run-experiment run-experiment-fail \
+        run-simulation run-simulation-hard \
         train train-cloud validate-train-config \
         compare-checkpoints compare-checkpoints-vla run-demo clean
 
@@ -118,6 +119,14 @@ run-experiment:
 ## run-experiment-fail: Run M6 experiment with a failure scenario to see retry/replan
 run-experiment-fail:
 	$(PYTHON) scripts/run_experiment.py --fail-scenario
+
+## run-simulation: Run M7 simulation experiment — easy mode (all conditions succeed)
+run-simulation:
+	$(PYTHON) scripts/run_simulation.py
+
+## run-simulation-hard: Run M7 simulation experiment — hard mode (VLA-only fails, agentic succeeds)
+run-simulation-hard:
+	$(PYTHON) scripts/run_simulation.py --hard
 
 # ---------------------------------------------------------------------------
 # Training (Milestone 4+, Cloud GPU required)

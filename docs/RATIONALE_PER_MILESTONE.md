@@ -293,9 +293,46 @@ These three fixes were driven by actual runtime errors against the installed pac
 
 **Decision:** `ConditionSummary` reports `completion_rate`, `mean_subtasks_planned`, `mean_policy_calls`, `mean_retries`, and `mean_replans` as floats without statistical tests.
 
-**Why:** The default scenario set in `run_experiment.py` has N=5 success scenarios — far too small for hypothesis tests. Reporting means without significance framing correctly conveys that these are descriptive statistics, not inferential claims. The evaluation note on every summary table restates this. Statistical tests (Wilcoxon) will be appropriate in M7 if the simulation set reaches N ≥ 10 per condition.
+**Why:** The default scenario set in `run_experiment.py` has N=5 success scenarios — far too small for hypothesis tests. Reporting means without significance framing correctly conveys that these are descriptive statistics, not inferential claims. The evaluation note on every summary table restates this. Statistical tests (Wilcoxon) are appropriate only when N ≥ 10 per condition; M7's simulation experiment uses N=3, also below that threshold.
 
 ---
 
-## Milestone 7 — (Pending)
+## Milestone 7 — Optional closed-loop simulation
+
+### Toy physics model over external simulator
+
+**Decision:** `SimulationEnvironment` is a single-scalar progress model (`progress ∈ [0, 1]`). No MuJoCo, no `gym-pusht`, no `gym-aloha`, no external simulator dependency.
+
+**Why:** The M7 research question is whether closed-loop evaluation can produce a *differentiated* result that mock evaluation cannot: vla_only failing while agentic conditions succeed. Answering that question only requires an environment where `step(action)` changes world state — not one that physically simulates SO-100 joint dynamics. A toy model achieves the scientific goal (demonstrating closed-loop differentiation) while keeping M7 installable on any laptop with no extra dependencies. External simulators add gigabytes of setup, platform-specific build steps, and brittle version pinning — none of which is necessary for the proof of concept. The honest disclaimer in `run_simulation.py` and `evaluation_note` fields makes the model's limitations explicit.
+
+### Scalar progress physics
+
+**Decision:** `action_contribution = (clip(mean(action.values), -1, 1) + 1) / 2 ∈ [0, 1]`; `delta = progress_per_step × action_contribution + noise`; `progress = clip(progress + delta, 0, 1)`.
+
+**Why:** This gives a continuous, deterministic gradient from no-progress (all-negative actions → contribution = 0) to full-speed progress (all-positive actions → contribution = 1), with zero-actions at half-speed (contribution = 0.5). The formula is symmetric and physically interpretable: an action of all zeros means "not doing much" — halfway between actively helping and actively fighting the task. MockRobotPolicy returns zeros, so it gets half-speed, which is enough to succeed in easy scenarios (generous budgets) and fail in hard ones (tight budgets). The model is simple enough to verify by mental arithmetic, which makes the integration tests checkable by inspection.
+
+### Constant total difficulty across conditions
+
+**Decision:** `success_threshold = total_progress / n_subtasks` for each condition. Total required progress is identical across vla_only, coarse_agentic, and fine_agentic.
+
+**Why:** If total difficulty were not constant, one condition could succeed simply because it was given an easier task — not because of planning quality. By distributing the same total progress into more, smaller per-subtask goals, the experiment is fair: every condition faces the same aggregate challenge, just partitioned differently. This makes the hard-scenario result interpretable: vla_only fails because its single threshold is unreachably high within the step budget, not because it was given a harder task.
+
+### Deferred import of `make_simulation_runner` in `run_simulation_experiment`
+
+**Decision:** `evaluation/simulation.py` imports `make_simulation_runner` inside the function body, not at module level.
+
+**Why:** Same reasoning as M6's deferred `make_mock_runner` import. `agent/runner.py` transitively imports `langgraph.graph`. A top-level import in `evaluation/simulation.py` would require the `[agent]` extra even for unit tests that only instantiate `SimulationEpisodeScenario` or `SimulationConditionResult`. Deferring keeps `evaluation/simulation.py` importable without the extra, so model tests run under `make check`. Integration tests use `pytest.importorskip("langgraph")` and skip cleanly when absent.
+
+### SimulationEnvironment holds its own RNG; reset re-seeds per subtask
+
+**Decision:** `SimulationEnvironment` holds a `numpy.random.Generator` that is re-seeded on every `reset(subtask)` call using `base_seed + hash(subtask.id) % 2**32`. With `noise_scale=0.0` the RNG is never consulted.
+
+**Why:** Reproducibility requires that each (subtask, condition) combination produces identical trajectories regardless of run order. Re-seeding per subtask also means different subtasks get statistically independent noise streams when `noise_scale > 0`, preventing artificial correlations between subtasks in the same episode. The base seed is set once at construction time and flows through `SimulationScenario`, making the entire experiment reproducible from a single `seed: int` field.
+
+### EvaluationMode.SIMULATION was already defined — no change needed
+
+**Decision:** The existing `EvaluationMode.SIMULATION` value in `domain/context.py` was used as-is. No new enum value was added.
+
+**Why:** The domain model was designed with simulation as a first-class evaluation mode from M1. Using the existing value confirms the design was correct and avoids proliferating similar constants.
+
 ## Milestone 8 — (Pending)
