@@ -341,6 +341,18 @@ All M7 results are labeled `evaluation_mode=SIMULATION` and carry `SimulationExp
 
 ---
 
+## Portfolio demo (M8)
+
+`make run-demo` runs all three evaluation modes back-to-back without a GPU, LLM key, or external simulator:
+
+1. **Replay mode** — `run_replay_demo()` loads 3 fixture episodes from `data/fixtures/episodes/`, runs `OfflineEvaluator` with `MockRobotPolicy`, and returns L1/L2 aggregate metrics. Labeled `evaluation_mode=REPLAY`.
+2. **Mock agent mode** — `run_mock_agent_demo()` runs the compiled LangGraph graph with `DeterministicPlanner("coarse")` and `MockRobotPolicy`, completing 2 subtasks. Labeled `evaluation_mode=MOCK`.
+3. **Simulation mode** — `run_simulation_demo()` runs the 3-condition experiment in the hard scenario (total_progress=0.5, max_steps=5). Labeled `evaluation_mode=SIMULATION`.
+
+Every demo function returns a dict that includes an `evaluation_note` stating what the result does and does not prove. The full structured experiment record is in [`docs/experiments.md`](experiments.md).
+
+---
+
 ## Anti-patterns to avoid
 
 - Reporting simulation or offline results as "robot performance"

@@ -159,9 +159,9 @@ compare-checkpoints-vla:
 # Demo (Milestone 8+)
 # ---------------------------------------------------------------------------
 
-## run-demo: Run the interactive agent demo
+## run-demo: Run the M8 portfolio demo (replay + mock agent + simulation, requires setup-agent)
 run-demo:
-	@echo "Milestone 8 target — not yet implemented"
+	$(PYTHON) scripts/run_demo.py
 
 # ---------------------------------------------------------------------------
 # Housekeeping

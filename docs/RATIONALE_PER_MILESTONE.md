@@ -335,4 +335,30 @@ These three fixes were driven by actual runtime errors against the installed pac
 
 **Why:** The domain model was designed with simulation as a first-class evaluation mode from M1. Using the existing value confirms the design was correct and avoids proliferating similar constants.
 
-## Milestone 8 — (Pending)
+## Milestone 8 — Portfolio hardening
+
+### GitHub Actions CI over a local-only gate
+
+**Decision:** Add `.github/workflows/ci.yml` that runs `make check` on every push and pull request to `main`, using `astral-sh/setup-uv@v3` and `uv sync --extra dev`.
+
+**Why:** `make check` (lint + typecheck + unit tests) already existed as the local quality gate. Without CI, the guarantee holds only for the developer who ran it last. A green badge on the README means the gate ran on a clean machine against a specific commit — it is evidence, not a claim. `astral-sh/setup-uv@v3` mirrors the local toolchain exactly (same `uv` version, same `pyproject.toml`, same `uv.lock`), so CI failure implies a real regression, not a tooling mismatch. Only `--extra dev` is installed on CI — no GPU, no LangGraph, no LeRobot. This means the 315 unit tests complete in ~30 seconds and GPU-optional extras do not break the gate.
+
+### Demo functions as an importable module, not a subprocess
+
+**Decision:** Expose `run_replay_demo()`, `run_mock_agent_demo()`, and `run_simulation_demo()` as functions in `src/langgraph_vla_agent/demo.py`, not as standalone scripts. The CLI wrapper (`scripts/run_demo.py`) imports and calls them.
+
+**Why:** A script that only runs via subprocess cannot be unit-tested without a process fixture or monkeypatching `sys.argv`. A module-level function is a regular callable — tests import and call it directly, assert on the returned dict, and run in under a second with no subprocess overhead. This pattern also makes the demo composable: any future notebook, dashboard, or benchmark harness can call the three functions independently. The CLI script adds the `--mode` and `--quiet` flags for human convenience without coupling the testable logic to `argparse`.
+
+**Deferred [agent] imports:** `run_replay_demo()` requires only `core + dev`. `run_mock_agent_demo()` and `run_simulation_demo()` require the `[agent]` extra (LangGraph). Rather than making `demo.py` fail to import without `[agent]`, the two heavier functions use deferred imports at the top of the function body. This is the same pattern used in `evaluation/experiment.py` (see M6 rationale) and ensures `from langgraph_vla_agent.demo import run_replay_demo` always succeeds.
+
+### Structured experiment log as a committed document
+
+**Decision:** Add `docs/experiments.md` as a version-controlled record of every experiment, including conditions, results, what was proved, what was not proved, and reproduce commands.
+
+**Why:** Metrics reported only in README become stale whenever the code changes and someone updates the number without explaining what changed. A structured log keyed by milestone and date creates a durable paper trail — the provenance for each number is right next to the number. The "what this does NOT prove" section is mandatory in every entry, following the same principle as `evaluation_note` Pydantic fields: the disclaimer must be structurally adjacent to the result, not hidden in a separate document. The log also makes the project reproducible by inspection: any reader can run the exact commands from the log and compare against the recorded outputs.
+
+### Interview-oriented architecture documentation
+
+**Decision:** Add a "Key decisions for interviews" section to `docs/architecture.md` with five Q&A entries covering Protocol vs ABC, deferred imports, `Annotated` reducers, `evaluation_note` as a Pydantic field, and toy physics vs MuJoCo.
+
+**Why:** Architecture documents typically describe *what* the system does. Interview panels — and future contributors onboarding quickly — need to understand *why* specific choices were made, especially choices that look non-obvious (why not ABC? why deferred imports? why a toy physics model?). Embedding the rationale in the same document as the architecture diagram means the justification is discoverable alongside the code structure. Each entry is framed as the question a reader would naturally ask, making it immediately usable for technical discussion preparation without needing to reconstruct the reasoning from git history.

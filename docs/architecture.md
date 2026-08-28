@@ -126,6 +126,15 @@ class RobotEnvironment(Protocol):
     def observe(self) -> RobotObservation: ...
 ```
 
+Implementations:
+
+| Class | Deps | Step semantics |
+|---|---|---|
+| `MockEnvironment` | none | Scripted termination — ignores actions |
+| `ReplayEnvironment` | none (local files) | Replays recorded observations — ignores actions |
+| `SimulationEnvironment` | none | Closed-loop: actions affect scalar progress |
+| `HardwareEnvironment` | hardware | Future work, isolated |
+
 ---
 
 ## Dependency injection
@@ -137,3 +146,34 @@ External dependencies (LLM client, policy, environment, artifact store) are inje
 ## Configuration
 
 All runtime configuration comes from environment variables and YAML config files in `configs/`. No hardcoded credentials, endpoints, or seeds. Reproducible experiments record the full config alongside results.
+
+---
+
+## Key decisions for interviews
+
+Five design choices that are worth discussing in depth because they reflect real engineering trade-offs.
+
+### 1. Why `typing.Protocol` over ABC for `RobotPolicy` and `RobotEnvironment`?
+
+Protocol uses **structural subtyping**: any class with the right method signatures satisfies the interface without importing from the agent codebase. This means:
+- `SmolVLAPolicyAdapter` can live in the `[vla]` optional extra without importing from `[agent]`.
+- Tests can inject a plain Python object as a policy without inheriting from anything.
+- A future `HardwareEnvironment` adapter is developed and tested in isolation.
+
+If we had used ABC, every implementation would couple to our base class, making extras and adapter isolation much harder.
+
+### 2. Why deferred imports for LangGraph inside evaluation functions?
+
+`agent/runner.py` transitively imports `langgraph.graph`. If `evaluation/experiment.py` imported `runner` at module level, the entire evaluation package would require the `[agent]` extra — even for unit tests that only instantiate `EpisodeScenario` or `ConditionResult`. By importing `make_mock_runner` inside the function body, `evaluation/experiment.py` stays importable with only `core + dev`. The 293 unit tests run under `make check` without the extra. This pattern repeats in `evaluation/simulation.py` for `make_simulation_runner`.
+
+### 3. Why `Annotated[list[str], operator.add]` for accumulator fields in `AgentState`?
+
+LangGraph's default merge strategy **overwrites** fields with whatever a node returns. A node that appends one item to a list would need to read the current state, extend it, and return the full new list — a read-before-write pattern that breaks under concurrent execution and requires every node to know the full state. The `Annotated` reducer tells LangGraph to apply `operator.add` (list concatenation) on the returned list, so nodes return only the new items and LangGraph handles the merge. This is the idiomatic LangGraph pattern for append-only accumulators like `completed_subtask_ids` and `execution_history_references`.
+
+### 4. Why `evaluation_note` as a Pydantic field rather than a code comment?
+
+The fundamental limitation of offline/simulation evaluation — that it cannot prove closed-loop real-world task success — must be structurally visible to every consumer of the result object, not just to someone reading the source. If it were a comment, a script, report generator, or downstream API could display metrics without the disclaimer. Making it a non-optional Pydantic field with a default means every `OfflineEvalResult`, `GranularityExperimentResult`, and `SimulationExperimentResult` carries the note alongside the numbers. It cannot be accidentally omitted.
+
+### 5. Why a toy scalar physics model instead of MuJoCo for M7?
+
+The M7 research question is: *can closed-loop evaluation produce differentiated outcomes that mock evaluation cannot?* Answering it requires an environment where `step(action)` updates world state — not necessarily one with rigid-body dynamics. A scalar progress model achieves the scientific goal (vla_only fails, agentic succeeds) with zero external dependencies, instant setup on any laptop, and a physics formula simple enough to verify by mental arithmetic. MuJoCo would answer a different, harder question (*does the orchestration layer improve task success with a real policy in a real physics world?*) but requires a SO-100-compatible simulation environment that does not currently exist publicly, plus GPU inference, adding weeks of setup for evidence that the toy model cannot supply anyway.

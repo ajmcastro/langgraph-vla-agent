@@ -1,5 +1,7 @@
 # LangGraph VLA Agent
 
+[![CI](https://github.com/acastro-masdima/langgraph-vla-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/acastro-masdima/langgraph-vla-agent/actions/workflows/ci.yml)
+
 An educational, production-quality open-source project demonstrating how an **agentic planning layer** (LangGraph + LLM) can orchestrate a **Vision-Language-Action (VLA) sensorimotor policy** (SmolVLA via Hugging Face LeRobot) for multi-step robot manipulation tasks.
 
 **Key components:**
@@ -53,7 +55,7 @@ Observation + result → verify → retry / replan / complete
 
 ## Results to date
 
-M7 is the current completed milestone. M4 (fine-tuning) is the furthest milestone with measurable numbers — see [docs/evaluation.md](docs/evaluation.md) for what each result means and what it does not prove.
+M8 is the current completed milestone. M4 (fine-tuning) is the furthest milestone with measurable numbers — see [docs/evaluation.md](docs/evaluation.md) for what each result means and what it does not prove. The full experiment log is in [docs/experiments.md](docs/experiments.md).
 
 | Milestone | What ran | Key result |
 |---|---|---|
@@ -64,6 +66,7 @@ M7 is the current completed milestone. M4 (fine-tuning) is the furthest mileston
 | M5 — LangGraph orchestration | Full StateGraph with DeterministicPlanner + MockRobotPolicy | Graph routing, retry/replan/fail paths, and safety gate verified in mock mode; 249 tests pass |
 | M6 — Granularity experiments | VlaOnlyPlanner + 3-condition experiment infrastructure | Orchestration cost confirmed: vla_only=1 policy call, coarse=2, fine=5; all conditions 100% on mock success scenarios; 270 tests pass |
 | M7 — Closed-loop simulation | SimulationEnvironment + 3-condition simulation experiment | Hard scenario: vla_only FAILS (threshold unreachable in budget), coarse/fine SUCCEED; first result mock mode cannot produce; 293 tests pass |
+| M8 — Portfolio hardening | CI, demo script, experiment log, interview architecture notes | `make run-demo` showcases all 3 evaluation modes; GitHub Actions CI runs `make check` on push; 315 tests pass |
 
 **M4 caveat:** The −24% L1 improvement is measured on 3 synthetic fixture episodes, not on real held-out episodes from `svla_so100_pickplace`. Lower prediction error on fixtures does not prove closed-loop task success. See [`data/provenance/training/smolvla_so100_m4.yaml`](data/provenance/training/smolvla_so100_m4.yaml) for full provenance.
 
@@ -159,6 +162,24 @@ uv run python scripts/run_simulation.py --hard --noise 0.05 --quiet
 
 No external simulator, GPU, or dataset needed. The output table shows per-condition completion rates and per-subtask thresholds, plus an explanation of what the result proves and what it does not.
 
+### Running the portfolio demo (Milestone 8)
+
+```bash
+# Install the [agent] extra (adds LangGraph + langchain-core):
+make setup-agent
+
+# Run all three demo modes (replay → mock agent → simulation):
+make run-demo
+
+# Or run a specific mode:
+uv run python scripts/run_demo.py --mode replay
+uv run python scripts/run_demo.py --mode mock
+uv run python scripts/run_demo.py --mode simulation
+uv run python scripts/run_demo.py --quiet   # suppress per-step output
+```
+
+No LLM key, GPU, or external simulator needed. The demo covers all three evaluation modes in sequence: offline replay (fixture episodes), mock LangGraph agent (pick-and-place), and closed-loop simulation (hard scenario where vla_only fails). Each mode prints a summary dict and an `evaluation_note` that states what the result does and does not prove. The full experiment log is in [`docs/experiments.md`](docs/experiments.md).
+
 ### Running the planning-granularity experiment (Milestone 6)
 
 ```bash
@@ -242,7 +263,7 @@ uv pip install --torch-backend cu128 lerobot
 | 5 | LangGraph orchestration | ✅ Complete (full StateGraph with retry/replan/safety; 249 tests) |
 | 6 | Planning-granularity experiments | ✅ Complete (VlaOnlyPlanner + 3-condition experiment; 270 tests) |
 | 7 | Optional closed-loop simulation | ✅ Complete (SimulationEnvironment + hard-scenario differentiation; 293 tests) |
-| 8 | Portfolio hardening | Pending |
+| 8 | Portfolio hardening | ✅ Complete (CI, demo script, experiment log, interview architecture notes; 315 tests) |
 
 See [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) for the full specification and [`docs/RATIONALE_PER_MILESTONE.md`](docs/RATIONALE_PER_MILESTONE.md) for design rationale.
 
@@ -260,6 +281,11 @@ See [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) for the full specification an
 
 ---
 
+## Development
+
+This project was designed and implemented by Antonio de Castro, with AI-assisted development using Claude Code (model Sonnet4.6).
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
