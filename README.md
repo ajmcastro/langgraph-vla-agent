@@ -1,5 +1,14 @@
 # LangGraph VLA Agent
 
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Agentic%20Orchestration-1C3C3C.svg)](https://github.com/langchain-ai/langgraph)
+[![LeRobot](https://img.shields.io/badge/LeRobot-Robotics-FFD21E.svg?logo=huggingface&logoColor=black)](https://github.com/huggingface/lerobot)
+[![SmolVLA](https://img.shields.io/badge/SmolVLA-Vision--Language--Action-FF9D00.svg?logo=huggingface&logoColor=white)](https://huggingface.co/lerobot/smolvla_base)
+[![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Pydantic](https://img.shields.io/badge/Pydantic-Typed%20Models-E92063.svg?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
+[![uv](https://img.shields.io/badge/uv-Package%20Manager-DE5FE9.svg)](https://docs.astral.sh/uv/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A reference implementation — designed to be studied — showing how an **agentic planning layer** (LangGraph + LLM) can orchestrate a **Vision-Language-Action (VLA) sensorimotor policy** (SmolVLA via Hugging Face LeRobot) for multi-step robot manipulation tasks. It follows production engineering practices throughout: typed domain models, Protocol-based dependency injection, layered evaluation modes, structured experiment logs, and GitHub Actions CI.
 
 **Key components:**
